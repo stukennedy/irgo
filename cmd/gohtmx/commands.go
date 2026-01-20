@@ -213,10 +213,10 @@ func installTools() error {
 }
 
 // runMobile builds and runs on mobile simulator
-func runMobile(platform string) error {
+func runMobile(platform string, devMode bool) error {
 	switch platform {
 	case "ios":
-		return runIOS()
+		return runIOS(devMode)
 	case "android":
 		return runAndroid()
 	default:
@@ -224,23 +224,12 @@ func runMobile(platform string) error {
 	}
 }
 
-func runIOS() error {
+func runIOS(devMode bool) error {
 	// Check for Xcode
 	if err := checkTool("xcodebuild", "Install Xcode from the App Store"); err != nil {
 		return err
 	}
 	if err := checkTool("xcrun", "Install Xcode Command Line Tools: xcode-select --install"); err != nil {
-		return err
-	}
-
-	// Build the framework first
-	modulePath, err := getModulePath()
-	if err != nil {
-		return fmt.Errorf("could not determine module path: %w", err)
-	}
-
-	fmt.Println("Building iOS framework...")
-	if err := buildIOS(modulePath); err != nil {
 		return err
 	}
 
@@ -252,6 +241,55 @@ func runIOS() error {
 			"  2. Add build/ios/Gohtmx.xcframework to the project\n"+
 			"  3. Copy ios/GoHTMX/*.swift files to your project\n"+
 			"  4. Set GoHTMXWebViewController as the root view controller", iosProjectPath)
+	}
+
+	// Dev server URL for simulator to connect to
+	devServerURL := "http://localhost:8080"
+	var devServerCmd *exec.Cmd
+
+	if devMode {
+		fmt.Println("Running in DEV MODE with hot reload...")
+		fmt.Println()
+
+		// Check for required dev tools
+		if err := checkTool("air", "go install github.com/air-verse/air@latest"); err != nil {
+			return err
+		}
+
+		// Update Info.plist to enable dev mode
+		infoPlistPath := filepath.Join(iosProjectPath, "Example/Info.plist")
+		if err := setDevServerInPlist(infoPlistPath, devServerURL); err != nil {
+			fmt.Printf("Warning: could not set dev server in Info.plist: %v\n", err)
+		}
+
+		// Start dev server in background
+		fmt.Printf("Starting dev server at %s...\n", devServerURL)
+		devServerCmd = exec.Command("./dev.sh")
+		devServerCmd.Stdout = os.Stdout
+		devServerCmd.Stderr = os.Stderr
+		if err := devServerCmd.Start(); err != nil {
+			return fmt.Errorf("failed to start dev server: %w", err)
+		}
+
+		// Give server time to start
+		fmt.Println("Waiting for dev server to start...")
+		exec.Command("sleep", "3").Run()
+
+	} else {
+		// Production mode: build the framework
+		modulePath, err := getModulePath()
+		if err != nil {
+			return fmt.Errorf("could not determine module path: %w", err)
+		}
+
+		fmt.Println("Building iOS framework...")
+		if err := buildIOS(modulePath); err != nil {
+			return err
+		}
+
+		// Clear dev server from Info.plist for production builds
+		infoPlistPath := filepath.Join(iosProjectPath, "Example/Info.plist")
+		clearDevServerInPlist(infoPlistPath)
 	}
 
 	// Find the workspace or project
@@ -272,12 +310,18 @@ func runIOS() error {
 
 	fmt.Println("Building iOS app...")
 	if err := runCommand(buildCmd[0], buildCmd[1:]...); err != nil {
+		if devServerCmd != nil {
+			devServerCmd.Process.Kill()
+		}
 		return fmt.Errorf("xcodebuild failed: %w", err)
 	}
 
 	// Find the built app
 	appPath := "build/ios/DerivedData/Build/Products/Debug-iphonesimulator/Example.app"
 	if _, err := os.Stat(appPath); os.IsNotExist(err) {
+		if devServerCmd != nil {
+			devServerCmd.Process.Kill()
+		}
 		return fmt.Errorf("built app not found at %s", appPath)
 	}
 
@@ -297,6 +341,9 @@ func runIOS() error {
 	// Install app
 	fmt.Println("Installing app...")
 	if err := runCommand("xcrun", "simctl", "install", "booted", appPath); err != nil {
+		if devServerCmd != nil {
+			devServerCmd.Process.Kill()
+		}
 		return fmt.Errorf("failed to install app: %w", err)
 	}
 
@@ -304,10 +351,28 @@ func runIOS() error {
 	fmt.Println("Launching app...")
 	bundleID := "com.gohtmx.Example" // Default bundle ID
 	if err := runCommand("xcrun", "simctl", "launch", "booted", bundleID); err != nil {
+		if devServerCmd != nil {
+			devServerCmd.Process.Kill()
+		}
 		return fmt.Errorf("failed to launch app: %w", err)
 	}
 
-	fmt.Println("\nApp running on iOS Simulator!")
+	if devMode {
+		fmt.Println()
+		fmt.Println("===========================================")
+		fmt.Println("iOS app running in DEV MODE with hot reload!")
+		fmt.Printf("Dev server: %s\n", devServerURL)
+		fmt.Println("Edit your Go code and see changes instantly.")
+		fmt.Println("Press Ctrl+C to stop.")
+		fmt.Println("===========================================")
+		fmt.Println()
+
+		// Wait for dev server to exit (user presses Ctrl+C)
+		devServerCmd.Wait()
+	} else {
+		fmt.Println("\nApp running on iOS Simulator!")
+	}
+
 	return nil
 }
 
@@ -541,5 +606,80 @@ func runGomobileCommand(args ...string) error {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	return cmd.Run()
+}
+
+// setDevServerInPlist adds GOHTMX_DEV_SERVER to Info.plist
+func setDevServerInPlist(plistPath, devServerURL string) error {
+	data, err := os.ReadFile(plistPath)
+	if err != nil {
+		return err
+	}
+
+	content := string(data)
+
+	// Check if GOHTMX_DEV_SERVER already exists
+	if strings.Contains(content, "GOHTMX_DEV_SERVER") {
+		// Update existing value
+		// Find and replace the string value after GOHTMX_DEV_SERVER key
+		start := strings.Index(content, "<key>GOHTMX_DEV_SERVER</key>")
+		if start != -1 {
+			stringStart := strings.Index(content[start:], "<string>")
+			stringEnd := strings.Index(content[start:], "</string>")
+			if stringStart != -1 && stringEnd != -1 {
+				newContent := content[:start+stringStart+8] + devServerURL + content[start+stringEnd:]
+				return os.WriteFile(plistPath, []byte(newContent), 0644)
+			}
+		}
+	}
+
+	// Add new key-value pair before </dict>
+	insertPoint := strings.LastIndex(content, "</dict>")
+	if insertPoint == -1 {
+		return fmt.Errorf("could not find </dict> in Info.plist")
+	}
+
+	newEntry := fmt.Sprintf("\t<key>GOHTMX_DEV_SERVER</key>\n\t<string>%s</string>\n", devServerURL)
+	newContent := content[:insertPoint] + newEntry + content[insertPoint:]
+
+	return os.WriteFile(plistPath, []byte(newContent), 0644)
+}
+
+// clearDevServerInPlist removes GOHTMX_DEV_SERVER from Info.plist
+func clearDevServerInPlist(plistPath string) {
+	data, err := os.ReadFile(plistPath)
+	if err != nil {
+		return
+	}
+
+	content := string(data)
+
+	// Find and remove GOHTMX_DEV_SERVER entry
+	keyStart := strings.Index(content, "<key>GOHTMX_DEV_SERVER</key>")
+	if keyStart == -1 {
+		return
+	}
+
+	// Find the end of the string value
+	valueEnd := strings.Index(content[keyStart:], "</string>")
+	if valueEnd == -1 {
+		return
+	}
+
+	// Remove the entire entry including newlines
+	entryEnd := keyStart + valueEnd + len("</string>")
+
+	// Look for trailing newline
+	if entryEnd < len(content) && content[entryEnd] == '\n' {
+		entryEnd++
+	}
+
+	// Look for leading whitespace/newline
+	entryStart := keyStart
+	for entryStart > 0 && (content[entryStart-1] == '\t' || content[entryStart-1] == ' ') {
+		entryStart--
+	}
+
+	newContent := content[:entryStart] + content[entryEnd:]
+	os.WriteFile(plistPath, []byte(newContent), 0644)
 }
 

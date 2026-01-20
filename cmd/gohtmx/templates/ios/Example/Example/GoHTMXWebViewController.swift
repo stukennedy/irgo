@@ -10,8 +10,36 @@ open class GoHTMXWebViewController: UIViewController {
     /// The scheme handler for intercepting requests
     private let schemeHandler = GoHTMXSchemeHandler()
 
-    /// JavaScript bridge code
-    private var bridgeScript: String {
+    /// Whether we're running in dev mode (connecting to local server)
+    private var isDevMode: Bool {
+        // Check for dev server URL in Info.plist or environment
+        if let devURL = Bundle.main.object(forInfoDictionaryKey: "GOHTMX_DEV_SERVER") as? String,
+           !devURL.isEmpty {
+            return true
+        }
+        // Also check environment variable (for debugging)
+        if let envURL = ProcessInfo.processInfo.environment["GOHTMX_DEV_SERVER"],
+           !envURL.isEmpty {
+            return true
+        }
+        return false
+    }
+
+    /// The dev server URL if in dev mode
+    private var devServerURL: String? {
+        if let devURL = Bundle.main.object(forInfoDictionaryKey: "GOHTMX_DEV_SERVER") as? String,
+           !devURL.isEmpty {
+            return devURL
+        }
+        if let envURL = ProcessInfo.processInfo.environment["GOHTMX_DEV_SERVER"],
+           !envURL.isEmpty {
+            return envURL
+        }
+        return nil
+    }
+
+    /// JavaScript bridge code for production mode (gohtmx:// scheme)
+    private var productionBridgeScript: String {
         return """
         (function() {
             // Store original fetch
@@ -54,7 +82,50 @@ open class GoHTMXWebViewController: UIViewController {
                 });
             }
 
-            console.log('GoHTMX bridge initialized');
+            console.log('GoHTMX bridge initialized (production mode)');
+        })();
+        """
+    }
+
+    /// JavaScript for dev mode - includes live reload functionality
+    private var devBridgeScript: String {
+        return """
+        (function() {
+            console.log('GoHTMX running in dev mode - connecting to local server');
+
+            // Live reload: poll /dev/reload for build timestamp changes
+            let lastBuildTime = null;
+            const checkInterval = 1000; // Check every second
+
+            async function checkForReload() {
+                try {
+                    const response = await fetch('/dev/reload', {
+                        cache: 'no-store'
+                    });
+                    const buildTime = await response.text();
+
+                    if (lastBuildTime === null) {
+                        // First check - just record the build time
+                        lastBuildTime = buildTime;
+                        console.log('GoHTMX: Connected to dev server (build: ' + buildTime + ')');
+                    } else if (buildTime !== lastBuildTime) {
+                        // Build time changed - server was rebuilt!
+                        console.log('GoHTMX: Server rebuilt, reloading...');
+                        window.location.reload();
+                        return;
+                    }
+                } catch (error) {
+                    // Server might be restarting, keep polling
+                    console.log('GoHTMX: Waiting for server...');
+                }
+
+                setTimeout(checkForReload, checkInterval);
+            }
+
+            // Start checking after a short delay
+            setTimeout(checkForReload, 500);
+
+            console.log('GoHTMX: Live reload enabled');
         })();
         """
     }
@@ -70,19 +141,35 @@ open class GoHTMXWebViewController: UIViewController {
         // Create configuration
         let config = WKWebViewConfiguration()
 
-        // Register custom scheme handler
-        config.setURLSchemeHandler(schemeHandler, forURLScheme: GoHTMXSchemeHandler.scheme)
+        if isDevMode {
+            // Dev mode: no custom scheme handler needed, just standard HTTP
+            print("GoHTMX: Running in DEV MODE - connecting to \(devServerURL ?? "unknown")")
 
-        // Add bridge script
-        let userScript = WKUserScript(
-            source: bridgeScript,
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: false
-        )
-        config.userContentController.addUserScript(userScript)
+            let userScript = WKUserScript(
+                source: devBridgeScript,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: false
+            )
+            config.userContentController.addUserScript(userScript)
+        } else {
+            // Production mode: use custom scheme handler
+            config.setURLSchemeHandler(schemeHandler, forURLScheme: GoHTMXSchemeHandler.scheme)
+
+            let userScript = WKUserScript(
+                source: productionBridgeScript,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: false
+            )
+            config.userContentController.addUserScript(userScript)
+
+            // Configure bridge
+            // (done after webView is created)
+        }
 
         // Configure preferences
-        config.preferences.javaScriptEnabled = true
+        let prefs = WKWebpagePreferences()
+        prefs.allowsContentJavaScript = true
+        config.defaultWebpagePreferences = prefs
 
         // Allow inline media playback
         config.allowsInlineMediaPlayback = true
@@ -101,31 +188,54 @@ open class GoHTMXWebViewController: UIViewController {
         // Add to view
         view.addSubview(webView)
 
-        // Configure bridge
-        GoHTMXBridge.shared.configure(webView: webView)
+        // Configure bridge for production mode
+        if !isDevMode {
+            GoHTMXBridge.shared.configure(webView: webView)
+        }
     }
 
     /// Load the initial HTML page
     private func loadInitialPage() {
-        let html = GoHTMXBridge.shared.renderInitialPage()
-
-        // Load with base URL using our custom scheme
-        webView.loadHTMLString(html, baseURL: URL(string: "gohtmx://app/"))
+        if isDevMode, let serverURL = devServerURL {
+            // Dev mode: load from local server
+            if let url = URL(string: serverURL) {
+                webView.load(URLRequest(url: url))
+            }
+        } else {
+            // Production mode: render from Go bridge
+            let html = GoHTMXBridge.shared.renderInitialPage()
+            webView.loadHTMLString(html, baseURL: URL(string: "gohtmx://app/"))
+        }
     }
 
     /// Navigate to a path within the app
     public func navigate(to path: String) {
-        var url = path
-        if !url.hasPrefix("gohtmx://") {
-            if url.hasPrefix("/") {
-                url = "gohtmx://app" + url
-            } else {
-                url = "gohtmx://app/" + url
+        if isDevMode, let serverURL = devServerURL {
+            // Dev mode: navigate via HTTP
+            var urlString = path
+            if urlString.hasPrefix("/") {
+                urlString = serverURL + urlString
+            } else if !urlString.contains("://") {
+                urlString = serverURL + "/" + urlString
             }
-        }
 
-        if let navURL = URL(string: url) {
-            webView.load(URLRequest(url: navURL))
+            if let url = URL(string: urlString) {
+                webView.load(URLRequest(url: url))
+            }
+        } else {
+            // Production mode: use gohtmx:// scheme
+            var url = path
+            if !url.hasPrefix("gohtmx://") {
+                if url.hasPrefix("/") {
+                    url = "gohtmx://app" + url
+                } else {
+                    url = "gohtmx://app/" + url
+                }
+            }
+
+            if let navURL = URL(string: url) {
+                webView.load(URLRequest(url: navURL))
+            }
         }
     }
 
@@ -154,6 +264,21 @@ extension GoHTMXWebViewController: WKNavigationDelegate {
         guard let url = navigationAction.request.url else {
             decisionHandler(.cancel)
             return
+        }
+
+        // In dev mode, allow HTTP to localhost
+        if isDevMode {
+            if url.scheme == "http" || url.scheme == "https" {
+                // Allow localhost connections
+                if let host = url.host, (host == "localhost" || host == "127.0.0.1" || host.hasSuffix(".local")) {
+                    decisionHandler(.allow)
+                    return
+                }
+                // External URLs: open in Safari
+                UIApplication.shared.open(url)
+                decisionHandler(.cancel)
+                return
+            }
         }
 
         // Allow gohtmx:// scheme

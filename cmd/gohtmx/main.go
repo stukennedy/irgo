@@ -38,10 +38,17 @@ func main() {
 
 	case "run":
 		if len(os.Args) < 3 {
-			fmt.Println("Usage: gohtmx run <ios|android>")
+			fmt.Println("Usage: gohtmx run <ios|android> [--dev]")
 			os.Exit(1)
 		}
-		err = runMobile(os.Args[2])
+		platform := os.Args[2]
+		devMode := false
+		for _, arg := range os.Args[3:] {
+			if arg == "--dev" || arg == "-d" {
+				devMode = true
+			}
+		}
+		err = runMobile(platform, devMode)
 
 	case "templ":
 		err = runTempl()
@@ -96,6 +103,7 @@ Examples:
   gohtmx new myapp       Create a new project
   gohtmx dev             Start dev server with hot reload
   gohtmx run ios         Build and run on iOS Simulator
+  gohtmx run ios --dev   Hot-reload mode (connects to dev server)
   gohtmx run android     Build and run on Android Emulator
   gohtmx build ios       Build iOS framework only`)
 }
@@ -158,17 +166,28 @@ Runs 'templ generate' to compile .templ files to Go code.`)
 		fmt.Println(`gohtmx run - Build and run on mobile simulator
 
 Usage:
-  gohtmx run ios         Build and run on iOS Simulator
-  gohtmx run android     Build and run on Android Emulator
+  gohtmx run ios              Build and run on iOS Simulator
+  gohtmx run ios --dev        Run iOS with hot-reload (connects to dev server)
+  gohtmx run android          Build and run on Android Emulator
+
+Flags:
+  --dev, -d    Development mode with hot-reload. Connects to localhost:8080
+               instead of embedded Go code. Run 'gohtmx dev' first.
 
 Requirements:
   - iOS: Xcode with iOS Simulator
   - Android: Android Studio with emulator
 
-This command:
+Standard mode (without --dev):
   1. Builds the Go framework with gomobile
   2. Builds the native app project
-  3. Installs and launches on simulator/emulator`)
+  3. Installs and launches on simulator/emulator
+
+Dev mode (with --dev):
+  1. Starts the dev server (hot-reload)
+  2. Builds iOS app without gomobile framework
+  3. Launches simulator connected to localhost:8080
+  4. Code changes instantly reflect in the app`)
 
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)

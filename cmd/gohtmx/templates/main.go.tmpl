@@ -5,9 +5,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"{{MODULE_PATH}}/app"
 )
+
+// buildTime is set when the program starts - changes on each rebuild
+var buildTime = time.Now().UnixNano()
 
 func main() {
 	// Check if running as desktop dev server
@@ -30,7 +34,18 @@ func main() {
 func runDevServer() {
 	r := app.NewRouter()
 
+	// Dev reload endpoint - returns build timestamp for live reload detection
+	handler := r.Handler()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/dev/reload", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprintf(w, "%d", buildTime)
+	})
+	mux.Handle("/", handler)
+
 	port := ":8080"
 	fmt.Printf("Starting dev server at http://localhost%s\n", port)
-	log.Fatal(http.ListenAndServe(port, r.Handler()))
+	fmt.Printf("Build time: %d\n", buildTime)
+	log.Fatal(http.ListenAndServe(port, mux))
 }
