@@ -1,3 +1,5 @@
+//go:build !desktop
+
 package main
 
 import (
@@ -24,10 +26,11 @@ func main() {
 	fmt.Println("{{PROJECT_NAME}} - built with gohtmx")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  go run . serve     Start development server")
-	fmt.Println("  gohtmx dev         Start dev server with hot reload")
-	fmt.Println("  gohtmx run ios     Build and run on iOS Simulator")
-	fmt.Println("  gohtmx run android Build and run on Android Emulator")
+	fmt.Println("  go run . serve       Start development server")
+	fmt.Println("  gohtmx dev           Start dev server with hot reload")
+	fmt.Println("  gohtmx run desktop   Run as desktop app")
+	fmt.Println("  gohtmx run ios       Build and run on iOS Simulator")
+	fmt.Println("  gohtmx run android   Build and run on Android Emulator")
 }
 
 // runDevServer starts an HTTP server for desktop testing
