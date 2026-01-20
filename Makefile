@@ -81,7 +81,7 @@ clean:
 	rm -rf $(BUILD_DIR)
 	go clean -cache
 
-# Initialize a new gohtmx project
+# Initialize a new irgo project
 init-project:
 	@echo "Creating project structure..."
 	mkdir -p templates/{layouts,pages,fragments,components}

@@ -9,7 +9,7 @@ import (
 
 func TestStaticFS_DevMode(t *testing.T) {
 	// Create a temp directory to simulate dev mode
-	tmpDir, err := os.MkdirTemp("", "gohtmx-test-*")
+	tmpDir, err := os.MkdirTemp("", "irgo-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestFindStaticDir(t *testing.T) {
 	defer os.Chdir(origDir)
 
 	// Create temp dir with static folder
-	tmpDir, err := os.MkdirTemp("", "gohtmx-test-*")
+	tmpDir, err := os.MkdirTemp("", "irgo-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestFindStaticDir_Fallback(t *testing.T) {
 	defer os.Chdir(origDir)
 
 	// Create temp dir WITHOUT static folder
-	tmpDir, err := os.MkdirTemp("", "gohtmx-test-*")
+	tmpDir, err := os.MkdirTemp("", "irgo-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

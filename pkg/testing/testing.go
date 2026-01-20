@@ -1,4 +1,4 @@
-// Package testing provides utilities for testing gohtmx applications.
+// Package testing provides utilities for testing irgo applications.
 //
 // Example usage:
 //
@@ -31,7 +31,7 @@ import (
 	"testing"
 )
 
-// Client provides test utilities for gohtmx applications.
+// Client provides test utilities for irgo applications.
 type Client struct {
 	handler http.Handler
 	headers map[string]string

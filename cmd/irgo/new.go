@@ -3,7 +3,9 @@ package main
 import (
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +15,50 @@ import (
 
 //go:embed templates/*
 var templateFS embed.FS
+
+// HTMX files to download during project creation
+var htmxFiles = map[string]string{
+	"static/js/htmx.min.js": "https://four.htmx.org/js/htmx.min.js",
+	"static/js/hx-ws.js":    "https://four.htmx.org/js/ext/hx-ws.js",
+}
+
+// downloadHTMX downloads HTMX files to the project's static/js directory
+func downloadHTMX(projectDir string) error {
+	for destPath, url := range htmxFiles {
+		fullPath := filepath.Join(projectDir, destPath)
+
+		// Create directory if needed
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+			return fmt.Errorf("creating directory for %s: %w", destPath, err)
+		}
+
+		// Download the file
+		resp, err := http.Get(url)
+		if err != nil {
+			return fmt.Errorf("downloading %s: %w", url, err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("downloading %s: status %d", url, resp.StatusCode)
+		}
+
+		// Read the content
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", url, err)
+		}
+
+		// Write to file
+		if err := os.WriteFile(fullPath, content, 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", destPath, err)
+		}
+
+		fmt.Printf("  downloaded: %s\n", destPath)
+	}
+
+	return nil
+}
 
 // getGoVersion returns the current Go version (e.g., "1.24.12")
 func getGoVersion() string {
@@ -214,6 +260,12 @@ func newProject(name string) error {
 
 	if err != nil {
 		return fmt.Errorf("copying templates: %w", err)
+	}
+
+	// Download HTMX files
+	fmt.Println("Downloading HTMX...")
+	if err := downloadHTMX(projectDir); err != nil {
+		return fmt.Errorf("downloading HTMX: %w", err)
 	}
 
 	// Make scripts executable

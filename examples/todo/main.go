@@ -1,6 +1,6 @@
 //go:build !desktop
 
-// Example: Todo app demonstrating gohtmx framework usage with templ
+// Example: Todo app demonstrating irgo framework usage with templ
 // This file handles mobile and dev server modes.
 package main
 

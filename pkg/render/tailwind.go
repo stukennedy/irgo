@@ -1,6 +1,6 @@
 package render
 
-// TailwindConfig provides default Tailwind CSS configuration for gohtmx apps.
+// TailwindConfig provides default Tailwind CSS configuration for irgo apps.
 const TailwindConfig = `/** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -155,7 +155,7 @@ const TailwindCSS = `@tailwind base;
 
 // PackageJSON provides the default package.json for Tailwind setup.
 const PackageJSON = `{
-  "name": "gohtmx-app",
+  "name": "irgo-app",
   "version": "1.0.0",
   "scripts": {
     "build:css": "tailwindcss -i ./assets/css/input.css -o ./assets/css/output.css --minify",
@@ -183,9 +183,9 @@ const BaseHTML = `<!DOCTYPE html>
     <title>{{.Title}}</title>
     <link rel="stylesheet" href="/assets/css/output.css">
     <script src="/assets/js/htmx.min.js"></script>
-    <script src="/assets/js/gohtmx-bridge.js"></script>
+    <script src="/assets/js/irgo-bridge.js"></script>
 </head>
-<body class="bg-gray-50 text-gray-900 safe-area" hx-ext="gohtmx-bridge">
+<body class="bg-gray-50 text-gray-900 safe-area" hx-ext="irgo-bridge">
     <div id="app">
         {{.Content}}
     </div>

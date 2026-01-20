@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"sync"
 	"sync/atomic"
 
@@ -78,6 +79,9 @@ var (
 func setupRouter() *router.Router {
 	r := router.New()
 
+	// Serve static files (CSS, JS)
+	r.Static("/static", http.Dir("static"))
+
 	// Home page - renders full page with all todos
 	r.GET("/", func(ctx *router.Context) (string, error) {
 		todos := store.All()
@@ -124,7 +128,7 @@ func setupRouter() *router.Router {
 }
 
 func addSampleData() {
-	store.Add("Learn gohtmx framework")
+	store.Add("Learn irgo framework")
 	store.Add("Build a mobile app with HTMX")
 	store.Add("Deploy to iOS and Android")
 }
