@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/stukennedy/gohtmx/pkg/core"
+	"github.com/stukennedy/irgo/pkg/core"
 )
 
 // HTTPAdapter bridges core.Request/Response to net/http.Handler.

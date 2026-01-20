@@ -1,0 +1,27 @@
+// Package app provides the shared application setup.
+// This is imported by both main.go (desktop) and mobile/mobile.go (mobile).
+package app
+
+import (
+	"{{MODULE_PATH}}/handlers"
+	"{{MODULE_PATH}}/templates"
+	"github.com/stukennedy/irgo/pkg/render"
+	"github.com/stukennedy/irgo/pkg/router"
+)
+
+var Renderer = render.NewTemplRenderer()
+
+// NewRouter creates a new router with all app routes configured.
+func NewRouter() *router.Router {
+	r := router.New()
+
+	// Home page
+	r.GET("/", func(ctx *router.Context) (string, error) {
+		return Renderer.Render(templates.HomePage())
+	})
+
+	// Mount handlers
+	handlers.Mount(r, Renderer)
+
+	return r
+}

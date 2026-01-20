@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/stukennedy/gohtmx/pkg/core"
+	"github.com/stukennedy/irgo/pkg/core"
 )
 
 func TestHTTPAdapterBasicRequest(t *testing.T) {

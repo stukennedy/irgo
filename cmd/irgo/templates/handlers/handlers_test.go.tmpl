@@ -1,0 +1,62 @@
+package handlers
+
+import (
+	"testing"
+
+	"{{MODULE_PATH}}/app"
+	irgotest "github.com/stukennedy/irgo/pkg/testing"
+)
+
+func TestHomePage(t *testing.T) {
+	r := app.NewRouter()
+	client := irgotest.NewClient(r.Handler())
+
+	resp := client.Get("/")
+	resp.AssertOK(t)
+	resp.AssertHTML(t)
+	resp.AssertContains(t, "{{PROJECT_NAME}}")
+}
+
+func TestHomePageHTMX(t *testing.T) {
+	r := app.NewRouter()
+	client := irgotest.NewClient(r.Handler())
+
+	// HTMX requests should also work
+	resp := client.HTMX().Get("/")
+	resp.AssertOK(t)
+}
+
+// Example test for a form submission
+// func TestCreateItem(t *testing.T) {
+// 	r := app.NewRouter()
+// 	client := irgotest.NewClient(r.Handler())
+//
+// 	resp := client.HTMX().PostForm("/items", map[string]string{
+// 		"name": "Test Item",
+// 	})
+// 	resp.AssertOK(t)
+// 	resp.AssertContains(t, "Test Item")
+// }
+
+// Example table-driven test
+// func TestRoutes(t *testing.T) {
+// 	r := app.NewRouter()
+// 	client := irgotest.NewClient(r.Handler())
+//
+// 	tests := []struct {
+// 		name   string
+// 		path   string
+// 		status int
+// 	}{
+// 		{"home", "/", 200},
+// 		{"about", "/about", 200},
+// 		{"not found", "/nonexistent", 404},
+// 	}
+//
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			resp := client.Get(tt.path)
+// 			resp.AssertStatus(t, tt.status)
+// 		})
+// 	}
+// }

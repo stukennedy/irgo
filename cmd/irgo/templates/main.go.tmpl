@@ -1,0 +1,54 @@
+//go:build !desktop
+
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"time"
+
+	"{{MODULE_PATH}}/app"
+)
+
+// buildTime is set when the program starts - changes on each rebuild
+var buildTime = time.Now().UnixNano()
+
+func main() {
+	// Check if running as desktop dev server
+	if len(os.Args) > 1 && os.Args[1] == "serve" {
+		runDevServer()
+		return
+	}
+
+	// Default: show usage
+	fmt.Println("{{PROJECT_NAME}} - built with irgo")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("  go run . serve       Start development server")
+	fmt.Println("  irgo dev             Start dev server with hot reload")
+	fmt.Println("  irgo run desktop     Run as desktop app")
+	fmt.Println("  irgo run ios         Build and run on iOS Simulator")
+	fmt.Println("  irgo run android     Build and run on Android Emulator")
+}
+
+// runDevServer starts an HTTP server for desktop testing
+func runDevServer() {
+	r := app.NewRouter()
+
+	// Dev reload endpoint - returns build timestamp for live reload detection
+	handler := r.Handler()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/dev/reload", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprintf(w, "%d", buildTime)
+	})
+	mux.Handle("/", handler)
+
+	port := ":8080"
+	fmt.Printf("Starting dev server at http://localhost%s\n", port)
+	fmt.Printf("Build time: %d\n", buildTime)
+	log.Fatal(http.ListenAndServe(port, mux))
+}

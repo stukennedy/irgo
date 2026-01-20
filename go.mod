@@ -1,4 +1,4 @@
-module github.com/stukennedy/gohtmx
+module github.com/stukennedy/irgo
 
 go 1.24.12
 

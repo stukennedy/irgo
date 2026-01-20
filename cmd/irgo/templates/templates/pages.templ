@@ -1,0 +1,40 @@
+package templates
+
+templ HomePage() {
+	@Page("{{PROJECT_NAME}}") {
+		<h1 class="text-3xl font-bold mb-6 text-gray-800">Welcome to {{ PROJECT_NAME }}</h1>
+		<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+			<h2 class="text-xl font-semibold mb-4">Getting Started</h2>
+			<p class="text-gray-600 mb-4">
+				Your irgo app is running! Edit the templates in <code class="bg-gray-100 px-2 py-1 rounded">templates/</code>
+				and handlers in <code class="bg-gray-100 px-2 py-1 rounded">handlers/</code>.
+			</p>
+			<!-- Example HTMX interaction -->
+			<div class="mt-6">
+				<input
+					type="text"
+					name="name"
+					placeholder="Enter your name"
+					hx-get="/greeting"
+					hx-trigger="keyup changed delay:300ms"
+					hx-target="#greeting-output"
+					class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+				/>
+				<div id="greeting-output" class="mt-4 text-lg text-gray-700">
+					@Greeting("World")
+				</div>
+			</div>
+		</div>
+		<div class="text-sm text-gray-500">
+			<p>
+				Powered by <a href="https://github.com/stukennedy/irgo" class="text-blue-500 hover:underline">irgo</a> +
+				<a href="https://htmx.org" class="text-blue-500 hover:underline">HTMX 4</a> +
+				<a href="https://templ.guide" class="text-blue-500 hover:underline">templ</a>
+			</p>
+		</div>
+	}
+}
+
+templ Greeting(name string) {
+	<span class="font-medium">Hello, { name }!</span>
+}

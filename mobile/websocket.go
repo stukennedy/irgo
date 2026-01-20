@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/stukennedy/gohtmx/pkg/websocket"
+	"github.com/stukennedy/irgo/pkg/websocket"
 )
 
 // WebSocketCallback is implemented by Swift/Kotlin to receive WebSocket messages.

@@ -1,4 +1,4 @@
-# GoHTMX
+# Irgo
 
 A hypermedia-driven application framework that uses Go as a runtime kernel with HTMX. Build native iOS, Android, and **desktop** apps using Go, HTML, and HTMX - no JavaScript frameworks required.
 
@@ -22,12 +22,12 @@ A hypermedia-driven application framework that uses Go as a runtime kernel with 
 │  ┌───────────────────────────────────────────────────────┐  │
 │  │                 WebView (HTMX)                         │  │
 │  │  • HTML rendered by Go templates                       │  │
-│  │  • HTMX handles interactions via gohtmx:// scheme     │  │
+│  │  • HTMX handles interactions via irgo:// scheme        │  │
 │  └──────────────────────┬────────────────────────────────┘  │
 │                         │                                    │
 │  ┌──────────────────────▼────────────────────────────────┐  │
 │  │           Native Bridge (Swift / Kotlin)               │  │
-│  │  • Intercepts gohtmx:// requests                       │  │
+│  │  • Intercepts irgo:// requests                          │  │
 │  │  • Routes to Go via gomobile                           │  │
 │  └──────────────────────┬────────────────────────────────┘  │
 │                         │                                    │
@@ -81,24 +81,24 @@ A hypermedia-driven application framework that uses Go as a runtime kernel with 
 - Windows: MinGW-w64 or similar C compiler
 - Linux: GCC and WebKit2GTK dev packages (`apt install libwebkit2gtk-4.0-dev`)
 
-### Install GoHTMX CLI
+### Install Irgo CLI
 
 ```bash
-go install github.com/stukennedy/gohtmx/cmd/gohtmx@latest
+go install github.com/stukennedy/irgo/cmd/irgo@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/stukennedy/gohtmx.git
-cd gohtmx/cmd/gohtmx
+git clone https://github.com/stukennedy/irgo.git
+cd irgo/cmd/irgo
 go install .
 ```
 
 ### Create a New Project
 
 ```bash
-gohtmx new myapp
+irgo new myapp
 cd myapp
 go mod tidy
 bun install  # or: npm install
@@ -107,35 +107,35 @@ bun install  # or: npm install
 ### Run as Desktop App
 
 ```bash
-gohtmx run desktop         # Run as desktop app
-gohtmx run desktop --dev   # With devtools enabled
+irgo run desktop         # Run as desktop app
+irgo run desktop --dev   # With devtools enabled
 ```
 
 ### Development with Hot Reload (Web)
 
 ```bash
-gohtmx dev                 # Start dev server at http://localhost:8080
+irgo dev                 # Start dev server at http://localhost:8080
 ```
 
 ### iOS Development
 
 ```bash
-gohtmx run ios --dev       # Hot-reload with iOS Simulator
-gohtmx run ios             # Production build
+irgo run ios --dev       # Hot-reload with iOS Simulator
+irgo run ios             # Production build
 ```
 
 ### Build for Production
 
 ```bash
 # Desktop
-gohtmx build desktop           # Build for current platform
-gohtmx build desktop macos     # Build macOS .app bundle
-gohtmx build desktop windows   # Build Windows .exe
-gohtmx build desktop linux     # Build Linux binary
+irgo build desktop           # Build for current platform
+irgo build desktop macos     # Build macOS .app bundle
+irgo build desktop windows   # Build Windows .exe
+irgo build desktop linux     # Build Linux binary
 
 # Mobile
-gohtmx build ios               # Build iOS framework
-gohtmx build android           # Build Android AAR
+irgo build ios               # Build iOS framework
+irgo build android           # Build Android AAR
 ```
 
 ## Project Structure
@@ -209,7 +209,7 @@ import (
     "net/http"
 
     "myapp/app"
-    "github.com/stukennedy/gohtmx/desktop"
+    "github.com/stukennedy/irgo/desktop"
 )
 
 func main() {
@@ -253,22 +253,22 @@ config := desktop.Config{
 
 ```bash
 # Run directly (compiles and runs)
-gohtmx run desktop
+irgo run desktop
 
 # With devtools (for debugging)
-gohtmx run desktop --dev
+irgo run desktop --dev
 ```
 
 ### Building Desktop Apps
 
 ```bash
 # Build for current platform
-gohtmx build desktop
+irgo build desktop
 
 # Build for specific platform
-gohtmx build desktop macos     # Creates build/desktop/macos/MyApp.app
-gohtmx build desktop windows   # Creates build/desktop/windows/MyApp.exe
-gohtmx build desktop linux     # Creates build/desktop/linux/MyApp
+irgo build desktop macos     # Creates build/desktop/macos/MyApp.app
+irgo build desktop windows   # Creates build/desktop/windows/MyApp.exe
+irgo build desktop linux     # Creates build/desktop/linux/MyApp
 ```
 
 ### Desktop vs Mobile: Key Differences
@@ -291,8 +291,8 @@ package handlers
 
 import (
     "myapp/templates"
-    "github.com/stukennedy/gohtmx/pkg/render"
-    "github.com/stukennedy/gohtmx/pkg/router"
+    "github.com/stukennedy/irgo/pkg/render"
+    "github.com/stukennedy/irgo/pkg/router"
 )
 
 func Mount(r *router.Router, renderer *render.TemplRenderer) {
@@ -328,7 +328,7 @@ package templates
 templ HomePage() {
     @Layout("Home") {
         <main class="container mx-auto p-4">
-            <h1 class="text-2xl font-bold">Welcome to GoHTMX</h1>
+            <h1 class="text-2xl font-bold">Welcome to Irgo</h1>
             <nav hx-boost="true">
                 <a href="/about" class="text-blue-500">About</a>
             </nav>
@@ -360,36 +360,36 @@ templ TodoItem(todo Todo) {
 
 ```bash
 # Create new project
-gohtmx new myapp
-gohtmx new .              # Initialize in current directory
+irgo new myapp
+irgo new .              # Initialize in current directory
 
 # Development
-gohtmx dev                # Start dev server with hot reload (web)
-gohtmx run desktop        # Run as desktop app
-gohtmx run desktop --dev  # Desktop with devtools
-gohtmx run ios --dev      # Hot reload with iOS Simulator
-gohtmx run android --dev  # Hot reload with Android Emulator
+irgo dev                # Start dev server with hot reload (web)
+irgo run desktop        # Run as desktop app
+irgo run desktop --dev  # Desktop with devtools
+irgo run ios --dev      # Hot reload with iOS Simulator
+irgo run android --dev  # Hot reload with Android Emulator
 
 # Production builds
-gohtmx build desktop      # Build desktop app for current platform
-gohtmx build desktop macos/windows/linux  # Cross-platform builds
-gohtmx build ios          # Build iOS framework
-gohtmx build android      # Build Android AAR
-gohtmx build all          # Build all mobile platforms
+irgo build desktop      # Build desktop app for current platform
+irgo build desktop macos/windows/linux  # Cross-platform builds
+irgo build ios          # Build iOS framework
+irgo build android      # Build Android AAR
+irgo build all          # Build all mobile platforms
 
-gohtmx run ios            # Build and run on iOS Simulator
-gohtmx run android        # Build and run on Android Emulator
+irgo run ios            # Build and run on iOS Simulator
+irgo run android        # Build and run on Android Emulator
 
 # Utilities
-gohtmx templ              # Generate templ files
-gohtmx install-tools      # Install required dev tools
-gohtmx version            # Print version
-gohtmx help [command]     # Show help
+irgo templ              # Generate templ files
+irgo install-tools      # Install required dev tools
+irgo version            # Print version
+irgo help [command]     # Show help
 ```
 
 ## WebSocket Support
 
-GoHTMX supports real-time updates via WebSockets using HTMX 4's `hx-ws` extension:
+Irgo supports real-time updates via WebSockets using HTMX 4's `hx-ws` extension:
 
 ```go
 templ LiveDashboard() {

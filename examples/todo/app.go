@@ -6,9 +6,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/stukennedy/gohtmx/examples/todo/templates"
-	"github.com/stukennedy/gohtmx/pkg/render"
-	"github.com/stukennedy/gohtmx/pkg/router"
+	"github.com/stukennedy/irgo/examples/todo/templates"
+	"github.com/stukennedy/irgo/pkg/render"
+	"github.com/stukennedy/irgo/pkg/router"
 )
 
 // TodoStore is a simple in-memory store

@@ -1,6 +1,6 @@
-# Testing GoHTMX Applications
+# Testing Irgo Applications
 
-GoHTMX provides a testing utilities package to make testing your applications easy and expressive.
+Irgo provides a testing utilities package to make testing your applications easy and expressive.
 
 ## Quick Start
 
@@ -9,7 +9,7 @@ import (
     "testing"
     
     "myapp/app"
-    gohtmxtest "github.com/stukennedy/gohtmx/pkg/testing"
+    irgotest "github.com/stukennedy/irgo/pkg/testing"
 )
 
 func TestHomePage(t *testing.T) {
@@ -17,7 +17,7 @@ func TestHomePage(t *testing.T) {
     r := app.NewRouter()
     
     // Create a test client
-    client := gohtmxtest.NewClient(r.Handler())
+    client := irgotest.NewClient(r.Handler())
     
     // Make requests and assert responses
     resp := client.Get("/")
@@ -31,7 +31,7 @@ func TestHomePage(t *testing.T) {
 The `Client` provides methods for making HTTP requests to your handler:
 
 ```go
-client := gohtmxtest.NewClient(handler)
+client := irgotest.NewClient(handler)
 
 // GET request
 resp := client.Get("/path")
@@ -122,7 +122,7 @@ html.ContainsClass("active")                 // Contains class
 For more complex requests, use the fluent request builder:
 
 ```go
-resp := gohtmxtest.NewRequest("POST", "/users").
+resp := irgotest.NewRequest("POST", "/users").
     WithHeader("Authorization", "Bearer token").
     WithFormBody(map[string]string{"name": "John"}).
     AsHTMX().
@@ -142,12 +142,12 @@ import (
     "testing"
     
     "myapp/app"
-    gohtmxtest "github.com/stukennedy/gohtmx/pkg/testing"
+    irgotest "github.com/stukennedy/irgo/pkg/testing"
 )
 
 func TestTodoHandlers(t *testing.T) {
     r := app.NewRouter()
-    client := gohtmxtest.NewClient(r.Handler())
+    client := irgotest.NewClient(r.Handler())
 
     t.Run("list todos", func(t *testing.T) {
         resp := client.Get("/todos")
@@ -199,7 +199,7 @@ import (
     "testing"
     
     "myapp/templates"
-    "github.com/stukennedy/gohtmx/pkg/render"
+    "github.com/stukennedy/irgo/pkg/render"
 )
 
 func TestTodoItemTemplate(t *testing.T) {
@@ -235,7 +235,7 @@ func TestIntegration(t *testing.T) {
     r := app.NewRouter()
     
     // Create a real test server
-    server := gohtmxtest.NewTestServer(r.Handler())
+    server := irgotest.NewTestServer(r.Handler())
     defer server.Close()
     
     // Make real HTTP requests
@@ -258,7 +258,7 @@ Desktop apps can be tested the same way since they use the same HTTP handler:
 ```go
 func TestDesktopApp(t *testing.T) {
     r := app.NewRouter()
-    client := gohtmxtest.NewClient(r.Handler())
+    client := irgotest.NewClient(r.Handler())
     
     // All the same tests work
     resp := client.Get("/")
@@ -272,7 +272,7 @@ For unit testing handlers without rendering templates:
 
 ```go
 func TestHandlerWithMockRenderer(t *testing.T) {
-    mock := &gohtmxtest.MockRenderer{}
+    mock := &irgotest.MockRenderer{}
     
     // Use mock in your handler
     handler := NewHandler(mock)

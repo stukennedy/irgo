@@ -1,13 +1,9 @@
 #!/bin/bash
 
-# Irgo Framework Development Script
-# This runs the example todo app for framework development/testing
-# For your own projects, use: irgo new myapp
+# Irgo Development Script
+# Watches templ files, builds tailwind CSS, and runs the Go server with hot reload
 
 set -e
-
-# Default to the todo example
-EXAMPLE="${EXAMPLE:-todo}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -22,22 +18,6 @@ log_info() {
 log_warn() {
     echo -e "${YELLOW}→${NC} $1"
 }
-
-# Create a signal file for browser-sync to watch
-touch .reload-signal
-
-# Function to generate templ files and signal reload
-generate_templ_and_trigger() {
-    echo "Generating templ files..."
-    templ generate
-    echo "Templ generation complete."
-    # Touch the signal file to trigger browser-sync
-    sleep 1
-    touch .reload-signal
-}
-
-# Export the function so it's available to subshells
-export -f generate_templ_and_trigger
 
 # Check for required tools
 check_requirements() {
@@ -128,7 +108,6 @@ cleanup() {
     log_info "Cleaning up..."
     [ -n "$ENTR_PID" ] && kill $ENTR_PID 2>/dev/null
     [ -n "$TAILWIND_PID" ] && kill $TAILWIND_PID 2>/dev/null
-    rm -f .reload-signal 2>/dev/null
 }
 
 trap cleanup EXIT

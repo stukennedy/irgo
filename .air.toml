@@ -1,6 +1,6 @@
-# Air configuration for gohtmx framework development
+# Air configuration for irgo framework development
 # This builds and runs the example todo app
-# For your own projects, use: gohtmx new myapp
+# For your own projects, use: irgo new myapp
 root = "."
 tmp_dir = "tmp"
 

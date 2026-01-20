@@ -1,4 +1,4 @@
-// Package core provides the fundamental types for the gohtmx framework.
+// Package core provides the fundamental types for the irgo framework.
 // All types are designed to be gomobile-compatible (no maps, no slices of custom types).
 package core
 

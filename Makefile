@@ -1,12 +1,12 @@
 .PHONY: all build ios android js clean test lint install-tools install help
 
 # Go module
-MODULE := github.com/stukennedy/gohtmx
+MODULE := github.com/stukennedy/irgo
 
 # Output directories
 BUILD_DIR := build
-IOS_OUT := $(BUILD_DIR)/ios/Gohtmx.xcframework
-ANDROID_OUT := $(BUILD_DIR)/android/gohtmx.aar
+IOS_OUT := $(BUILD_DIR)/ios/Irgo.xcframework
+ANDROID_OUT := $(BUILD_DIR)/android/irgo.aar
 
 # Default target
 all: build
@@ -23,10 +23,10 @@ test:
 lint:
 	golangci-lint run ./...
 
-# Install the gohtmx CLI
+# Install the irgo CLI
 install:
-	go install ./cmd/gohtmx
-	@echo "gohtmx CLI installed. Run 'gohtmx new myapp' to create a new project."
+	go install ./cmd/irgo
+	@echo "irgo CLI installed. Run 'irgo new myapp' to create a new project."
 
 # Install required tools
 install-tools:
@@ -50,8 +50,8 @@ ios: build
 	@echo "To use in Xcode:"
 	@echo "  1. Drag $(IOS_OUT) into your Xcode project"
 	@echo "  2. Add to 'Frameworks, Libraries, and Embedded Content'"
-	@echo "  3. Copy ios/GoHTMX/*.swift into your project"
-	@echo "  4. Use GoHTMXWebViewController as your root view controller"
+	@echo "  3. Copy ios/Irgo/*.swift into your project"
+	@echo "  4. Use IrgoWebViewController as your root view controller"
 
 # Build Android AAR (requires Android SDK)
 android: build
@@ -62,15 +62,15 @@ android: build
 	@echo ""
 	@echo "To use in Android Studio:"
 	@echo "  1. Copy $(ANDROID_OUT) to app/libs/"
-	@echo "  2. Add to build.gradle: implementation files('libs/gohtmx.aar')"
-	@echo "  3. Copy android/app/src/main/kotlin/com/gohtmx/*.kt to your project"
-	@echo "  4. Extend GoHTMXActivity in your MainActivity"
+	@echo "  2. Add to build.gradle: implementation files('libs/irgo.aar')"
+	@echo "  3. Copy android/app/src/main/kotlin/com/irgo/*.kt to your project"
+	@echo "  4. Extend IrgoActivity in your MainActivity"
 
 # Bundle JavaScript
 js:
 	@mkdir -p $(BUILD_DIR)/js
-	cp js/gohtmx-bridge.js $(BUILD_DIR)/js/
-	@echo "JavaScript bundled: $(BUILD_DIR)/js/gohtmx-bridge.js"
+	cp js/irgo-bridge.js $(BUILD_DIR)/js/
+	@echo "JavaScript bundled: $(BUILD_DIR)/js/irgo-bridge.js"
 
 # Build all platforms
 mobile: ios android js
@@ -119,13 +119,13 @@ docs:
 
 # Version info
 version:
-	@echo "gohtmx framework"
+	@echo "irgo framework"
 	@go version
 	@echo "Module: $(MODULE)"
 
 # Help
 help:
-	@echo "GoHTMX Framework - Build Targets"
+	@echo "Irgo Framework - Build Targets"
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev          - Run example app with hot reload"
@@ -138,8 +138,8 @@ help:
 	@echo "  make mobile       - Build all mobile platforms"
 	@echo ""
 	@echo "CLI:"
-	@echo "  make install      - Install gohtmx CLI"
-	@echo "  gohtmx new myapp  - Create new project"
+	@echo "  make install      - Install irgo CLI"
+	@echo "  irgo new myapp    - Create new project"
 	@echo ""
 	@echo "Setup:"
 	@echo "  make install-tools - Install dev tools (templ, gomobile, air)"

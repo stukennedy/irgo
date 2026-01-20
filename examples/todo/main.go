@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/stukennedy/gohtmx/mobile"
+	"github.com/stukennedy/irgo/mobile"
 )
 
 func main() {

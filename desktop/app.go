@@ -27,7 +27,7 @@ type Config struct {
 // DefaultConfig returns sensible defaults for a desktop app
 func DefaultConfig() Config {
 	return Config{
-		Title:     "GoHTMX App",
+		Title:     "Irgo App",
 		Width:     1024,
 		Height:    768,
 		Resizable: true,

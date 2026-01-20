@@ -1,10 +1,10 @@
-# GoHTMX Framework - AI Assistant Guide
+# Irgo Framework - AI Assistant Guide
 
-> This document instructs AI coding assistants on how to write applications using the GoHTMX framework.
+> This document instructs AI coding assistants on how to write applications using the Irgo framework.
 
 ## Framework Overview
 
-GoHTMX is a mobile application framework that uses:
+Irgo is a mobile application framework that uses:
 - **Go** as the backend runtime (compiled via gomobile)
 - **HTMX** for frontend interactivity (hypermedia-driven)
 - **templ** for type-safe HTML templates
@@ -21,7 +21,7 @@ The key insight: there's no network - HTTP requests from HTMX are intercepted by
 
 ## Project Structure
 
-When working on a GoHTMX project, expect this structure:
+When working on an Irgo project, expect this structure:
 
 ```
 project/
@@ -536,7 +536,7 @@ r.POST("/validate/email", func(ctx *router.Context) (string, error) {
 
 ## WebSocket Patterns
 
-GoHTMX supports real-time updates via WebSockets using HTMX 4's `hx-ws` extension. Use WebSockets for live dashboards, notifications, chat, and server-push updates.
+Irgo supports real-time updates via WebSockets using HTMX 4's `hx-ws` extension. Use WebSockets for live dashboards, notifications, chat, and server-push updates.
 
 ### Layout Requirement
 

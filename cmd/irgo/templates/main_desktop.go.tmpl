@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"{{MODULE_PATH}}/app"
 	"github.com/stukennedy/irgo/desktop"
 )
 
@@ -14,8 +15,7 @@ func main() {
 	devMode := flag.Bool("dev", false, "Enable devtools")
 	flag.Parse()
 
-	r := setupRouter()
-	addSampleData()
+	r := app.NewRouter()
 
 	// Create HTTP mux with static file serving
 	mux := http.NewServeMux()
@@ -25,14 +25,14 @@ func main() {
 
 	// Configure desktop app
 	config := desktop.DefaultConfig()
-	config.Title = "Todo App"
+	config.Title = "{{PROJECT_NAME}}"
 	config.Debug = *devMode
 
 	// Create and run desktop app
-	app := desktop.New(mux, config)
+	desktopApp := desktop.New(mux, config)
 
-	fmt.Println("Starting Todo desktop app...")
-	if err := app.Run(); err != nil {
+	fmt.Println("Starting {{PROJECT_NAME}} desktop app...")
+	if err := desktopApp.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)
 	}
 }

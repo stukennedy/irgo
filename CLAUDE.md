@@ -1,10 +1,10 @@
-# GoHTMX Framework - LLM Reference
+# Irgo Framework - LLM Reference
 
-This document provides a comprehensive reference for LLMs (Claude, GPT, etc.) working with the GoHTMX framework.
+This document provides a comprehensive reference for LLMs (Claude, GPT, etc.) working with the Irgo framework.
 
 ## Framework Overview
 
-GoHTMX is a **hypermedia-driven application framework** for building cross-platform apps (iOS, Android, desktop, web) using Go + HTMX + Templ. It follows the hypermedia architecture where the server returns HTML fragments, not JSON.
+Irgo is a **hypermedia-driven application framework** for building cross-platform apps (iOS, Android, desktop, web) using Go + HTMX + Templ. It follows the hypermedia architecture where the server returns HTML fragments, not JSON.
 
 ### Core Concept
 
@@ -43,12 +43,12 @@ myapp/
 
 ## Key Packages
 
-### `github.com/stukennedy/gohtmx/pkg/router`
+### `github.com/stukennedy/irgo/pkg/router`
 
 Chi-based router with HTMX conveniences.
 
 ```go
-import "github.com/stukennedy/gohtmx/pkg/router"
+import "github.com/stukennedy/irgo/pkg/router"
 
 r := router.New()
 
@@ -130,12 +130,12 @@ func handler(ctx *router.Context) (string, error) {
 }
 ```
 
-### `github.com/stukennedy/gohtmx/pkg/render`
+### `github.com/stukennedy/irgo/pkg/render`
 
 Templ template rendering.
 
 ```go
-import "github.com/stukennedy/gohtmx/pkg/render"
+import "github.com/stukennedy/irgo/pkg/render"
 
 renderer := render.NewTemplRenderer()
 
@@ -143,12 +143,12 @@ renderer := render.NewTemplRenderer()
 html, err := renderer.Render(templates.MyComponent(data))
 ```
 
-### `github.com/stukennedy/gohtmx/desktop`
+### `github.com/stukennedy/irgo/desktop`
 
 Desktop application support (webview + HTTP server).
 
 ```go
-import "github.com/stukennedy/gohtmx/desktop"
+import "github.com/stukennedy/irgo/desktop"
 
 // Configuration
 config := desktop.Config{
@@ -174,12 +174,12 @@ staticDir := desktop.FindStaticDir()      // Find static files
 resourcePath := desktop.FindResourcePath() // Find bundled resources
 ```
 
-### `github.com/stukennedy/gohtmx/mobile`
+### `github.com/stukennedy/irgo/mobile`
 
 Mobile bridge for iOS/Android.
 
 ```go
-import "github.com/stukennedy/gohtmx/mobile"
+import "github.com/stukennedy/irgo/mobile"
 
 mobile.Initialize()
 mobile.SetHandler(r.Handler())
@@ -383,8 +383,8 @@ package app
 
 import (
     "myapp/handlers"
-    "github.com/stukennedy/gohtmx/pkg/render"
-    "github.com/stukennedy/gohtmx/pkg/router"
+    "github.com/stukennedy/irgo/pkg/render"
+    "github.com/stukennedy/irgo/pkg/router"
 )
 
 func NewRouter() *router.Router {
@@ -412,7 +412,7 @@ import (
     "net/http"
 
     "myapp/app"
-    "github.com/stukennedy/gohtmx/desktop"
+    "github.com/stukennedy/irgo/desktop"
 )
 
 func main() {
@@ -455,7 +455,7 @@ import (
     "os"
 
     "myapp/app"
-    "github.com/stukennedy/gohtmx/mobile"
+    "github.com/stukennedy/irgo/mobile"
 )
 
 func main() {
@@ -489,31 +489,31 @@ func runDevServer() {
 
 ```bash
 # Project creation
-gohtmx new myapp           # Create new project
-gohtmx new .               # Initialize in current directory
+irgo new myapp           # Create new project
+irgo new .               # Initialize in current directory
 
 # Development
-gohtmx dev                 # Web dev server with hot reload
-gohtmx run desktop         # Run as desktop app
-gohtmx run desktop --dev   # Desktop with devtools
-gohtmx run ios --dev       # iOS Simulator with hot reload
-gohtmx run android --dev   # Android Emulator with hot reload
+irgo dev                 # Web dev server with hot reload
+irgo run desktop         # Run as desktop app
+irgo run desktop --dev   # Desktop with devtools
+irgo run ios --dev       # iOS Simulator with hot reload
+irgo run android --dev   # Android Emulator with hot reload
 
 # Production builds
-gohtmx build desktop       # Build desktop for current OS
-gohtmx build desktop macos # Build macOS .app
-gohtmx build desktop windows # Build Windows .exe
-gohtmx build desktop linux # Build Linux binary
-gohtmx build ios           # Build iOS framework
-gohtmx build android       # Build Android AAR
+irgo build desktop       # Build desktop for current OS
+irgo build desktop macos # Build macOS .app
+irgo build desktop windows # Build Windows .exe
+irgo build desktop linux # Build Linux binary
+irgo build ios           # Build iOS framework
+irgo build android       # Build Android AAR
 
 # Production run
-gohtmx run ios             # Build + run iOS
-gohtmx run android         # Build + run Android
+irgo run ios             # Build + run iOS
+irgo run android         # Build + run Android
 
 # Utilities
-gohtmx templ               # Generate templ files
-gohtmx install-tools       # Install dev dependencies
+irgo templ               # Generate templ files
+irgo install-tools       # Install dev dependencies
 ```
 
 ## Build Tags
@@ -528,7 +528,7 @@ The framework uses Go build tags to separate platform-specific code:
 When building:
 - `go build .` → uses `main.go` (mobile/web)
 - `go build -tags desktop .` → uses `main_desktop.go` (desktop)
-- `gohtmx run desktop` → automatically adds `-tags desktop`
+- `irgo run desktop` → automatically adds `-tags desktop`
 
 ## Dependencies
 
@@ -536,11 +536,11 @@ When building:
 // go.mod
 require (
     github.com/a-h/templ v0.3.977
-    github.com/stukennedy/gohtmx v0.1.0
+    github.com/stukennedy/irgo v0.1.0
 )
 ```
 
-The gohtmx module includes:
+The irgo module includes:
 - `github.com/go-chi/chi/v5` - HTTP router
 - `github.com/webview/webview_go` - Desktop webview (CGO required)
 

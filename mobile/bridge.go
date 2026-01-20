@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/stukennedy/gohtmx/pkg/adapter"
-	"github.com/stukennedy/gohtmx/pkg/core"
-	"github.com/stukennedy/gohtmx/pkg/websocket"
+	"github.com/stukennedy/irgo/pkg/adapter"
+	"github.com/stukennedy/irgo/pkg/core"
+	"github.com/stukennedy/irgo/pkg/websocket"
 )
 
 var (

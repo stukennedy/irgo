@@ -1,4 +1,4 @@
 # Add project specific ProGuard rules here.
-# Keep GoHTMX classes
--keep class com.gohtmx.** { *; }
--keep class gohtmx.** { *; }
+# Keep Irgo classes
+-keep class com.irgo.** { *; }
+-keep class irgo.** { *; }

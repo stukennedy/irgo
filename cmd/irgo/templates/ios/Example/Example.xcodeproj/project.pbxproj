@@ -34,11 +34,11 @@
 /* Begin PBXFileReference section */
 		A2000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A2000002 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		A2000003 /* IrgoBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IrgoBridge.swift; path = ../../Irgo/IrgoBridge.swift; sourceTree = "<group>"; };
-		A2000004 /* IrgoSchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IrgoSchemeHandler.swift; path = ../../Irgo/IrgoSchemeHandler.swift; sourceTree = "<group>"; };
-		A2000005 /* IrgoWebViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IrgoWebViewController.swift; path = ../../Irgo/IrgoWebViewController.swift; sourceTree = "<group>"; };
-		A2000006 /* IrgoWebSocketBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IrgoWebSocketBridge.swift; path = ../../Irgo/IrgoWebSocketBridge.swift; sourceTree = "<group>"; };
-		A2000010 /* Irgo.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Irgo.xcframework; path = ../../../build/ios/Irgo.xcframework; sourceTree = "<group>"; };
+		A2000003 /* IrgoBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IrgoBridge.swift; sourceTree = "<group>"; };
+		A2000004 /* IrgoSchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IrgoSchemeHandler.swift; sourceTree = "<group>"; };
+		A2000005 /* IrgoWebViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IrgoWebViewController.swift; sourceTree = "<group>"; };
+		A2000006 /* IrgoWebSocketBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IrgoWebSocketBridge.swift; sourceTree = "<group>"; };
+		A2000010 /* Irgo.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Irgo.xcframework; path = ../../build/ios/Irgo.xcframework; sourceTree = "<group>"; };
 		A2000020 /* Example.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Example.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000030 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -59,7 +59,6 @@
 			isa = PBXGroup;
 			children = (
 				A5000002 /* Example */,
-				A5000003 /* Irgo */,
 				A5000004 /* Frameworks */,
 				A5000005 /* Products */,
 			);
@@ -70,20 +69,13 @@
 			children = (
 				A2000001 /* AppDelegate.swift */,
 				A2000002 /* SceneDelegate.swift */,
-				A2000030 /* Info.plist */,
-			);
-			path = Example;
-			sourceTree = "<group>";
-		};
-		A5000003 /* Irgo */ = {
-			isa = PBXGroup;
-			children = (
 				A2000003 /* IrgoBridge.swift */,
 				A2000004 /* IrgoSchemeHandler.swift */,
 				A2000005 /* IrgoWebViewController.swift */,
 				A2000006 /* IrgoWebSocketBridge.swift */,
+				A2000030 /* Info.plist */,
 			);
-			name = Irgo;
+			path = Example;
 			sourceTree = "<group>";
 		};
 		A5000004 /* Frameworks */ = {

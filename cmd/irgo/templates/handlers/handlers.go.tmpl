@@ -1,0 +1,21 @@
+package handlers
+
+import (
+	"{{MODULE_PATH}}/templates"
+	"github.com/stukennedy/irgo/pkg/render"
+	"github.com/stukennedy/irgo/pkg/router"
+)
+
+// Mount registers all handlers on the router
+func Mount(r *router.Router, renderer *render.TemplRenderer) {
+	// Example: greeting endpoint
+	r.GET("/greeting", func(ctx *router.Context) (string, error) {
+		name := ctx.Query("name")
+		if name == "" {
+			name = "World"
+		}
+		return renderer.Render(templates.Greeting(name))
+	})
+
+	// Add more handlers here...
+}

@@ -8,8 +8,8 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
-	if config.Title != "GoHTMX App" {
-		t.Errorf("expected default title 'GoHTMX App', got %q", config.Title)
+	if config.Title != "Irgo App" {
+		t.Errorf("expected default title 'Irgo App', got %q", config.Title)
 	}
 	if config.Width != 1024 {
 		t.Errorf("expected default width 1024, got %d", config.Width)
