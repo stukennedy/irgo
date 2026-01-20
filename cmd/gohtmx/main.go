@@ -36,11 +36,21 @@ func main() {
 		}
 		err = runBuild(os.Args[2])
 
+	case "run":
+		if len(os.Args) < 3 {
+			fmt.Println("Usage: gohtmx run <ios|android>")
+			os.Exit(1)
+		}
+		err = runMobile(os.Args[2])
+
 	case "templ":
 		err = runTempl()
 
 	case "test":
 		err = runTest()
+
+	case "install-tools":
+		err = installTools()
 
 	case "version", "-v", "--version":
 		fmt.Printf("gohtmx %s\n", version)
@@ -75,17 +85,19 @@ Commands:
   dev              Run development server with hot reload
   serve            Run server without file watching
   build <target>   Build for mobile (ios, android, or all)
+  run <platform>   Build and run on mobile simulator
   templ            Generate templ files
   test             Run tests
+  install-tools    Install required dev tools (gomobile, templ, air)
   version          Print version information
   help [command]   Show help for a command
 
 Examples:
   gohtmx new myapp       Create a new project
   gohtmx dev             Start dev server with hot reload
-  gohtmx build ios       Build iOS framework
-  gohtmx build android   Build Android AAR
-  gohtmx build all       Build all mobile platforms`)
+  gohtmx run ios         Build and run on iOS Simulator
+  gohtmx run android     Build and run on Android Emulator
+  gohtmx build ios       Build iOS framework only`)
 }
 
 func printCommandHelp(cmd string) {
@@ -141,6 +153,22 @@ Usage:
   gohtmx templ
 
 Runs 'templ generate' to compile .templ files to Go code.`)
+
+	case "run":
+		fmt.Println(`gohtmx run - Build and run on mobile simulator
+
+Usage:
+  gohtmx run ios         Build and run on iOS Simulator
+  gohtmx run android     Build and run on Android Emulator
+
+Requirements:
+  - iOS: Xcode with iOS Simulator
+  - Android: Android Studio with emulator
+
+This command:
+  1. Builds the Go framework with gomobile
+  2. Builds the native app project
+  3. Installs and launches on simulator/emulator`)
 
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)

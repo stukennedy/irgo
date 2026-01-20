@@ -29,18 +29,105 @@ func getGoVersion() string {
 	return "1.23"
 }
 
+// getGoHTMXPath returns the path to the gohtmx source directory if developing locally
+func getGoHTMXPath() string {
+	// Check GOHTMX_PATH environment variable first
+	if path := os.Getenv("GOHTMX_PATH"); path != "" {
+		return path
+	}
+
+	// Helper to check if a directory contains gohtmx source
+	isGoHTMXDir := func(dir string) bool {
+		modPath := filepath.Join(dir, "go.mod")
+		if data, err := os.ReadFile(modPath); err == nil {
+			return strings.Contains(string(data), "module github.com/stukennedy/gohtmx")
+		}
+		return false
+	}
+
+	// Check if we're running from within or near the gohtmx source tree
+	// by looking at current directory and parents
+	cwd, err := os.Getwd()
+	if err == nil {
+		dir := cwd
+		for i := 0; i < 10; i++ {
+			if isGoHTMXDir(dir) {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+
+	// Check relative to executable location
+	// If gohtmx binary is at /path/to/gohtmx/cmd/gohtmx/gohtmx, source is at /path/to/gohtmx
+	if execPath, err := os.Executable(); err == nil {
+		execPath, _ = filepath.EvalSymlinks(execPath)
+		execDir := filepath.Dir(execPath)
+
+		// Check if we're in cmd/gohtmx directory
+		if filepath.Base(filepath.Dir(execDir)) == "cmd" {
+			possibleRoot := filepath.Dir(filepath.Dir(execDir))
+			if isGoHTMXDir(possibleRoot) {
+				return possibleRoot
+			}
+		}
+
+		// Check parent directories of executable
+		dir := execDir
+		for i := 0; i < 5; i++ {
+			if isGoHTMXDir(dir) {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+
+	// Check common development locations
+	home, _ := os.UserHomeDir()
+	commonPaths := []string{
+		filepath.Join(home, "Dev", "gohtmx"),
+		filepath.Join(home, "dev", "gohtmx"),
+		filepath.Join(home, "Development", "gohtmx"),
+		filepath.Join(home, "Projects", "gohtmx"),
+		filepath.Join(home, "go", "src", "github.com", "stukennedy", "gohtmx"),
+	}
+
+	for _, path := range commonPaths {
+		if isGoHTMXDir(path) {
+			return path
+		}
+	}
+
+	return ""
+}
+
 func newProject(name string) error {
-	// Determine project directory
+	// Determine project directory and project name
 	var projectDir string
+	var projectName string
+
 	if name == "." {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("getting current directory: %w", err)
 		}
 		projectDir = cwd
-		name = filepath.Base(cwd)
+		projectName = filepath.Base(cwd)
+	} else if filepath.IsAbs(name) {
+		// Absolute path provided
+		projectDir = name
+		projectName = filepath.Base(name)
 	} else {
 		projectDir = name
+		projectName = name
 	}
 
 	// Check if directory exists and is not empty
@@ -53,7 +140,7 @@ func newProject(name string) error {
 		}
 	}
 
-	fmt.Printf("Creating new gohtmx project: %s\n", name)
+	fmt.Printf("Creating new gohtmx project: %s\n", projectName)
 
 	// Create project structure
 	dirs := []string{
@@ -95,16 +182,25 @@ func newProject(name string) error {
 			return fmt.Errorf("reading template %s: %w", path, err)
 		}
 
-		// Replace placeholders
-		contentStr := string(content)
-		contentStr = strings.ReplaceAll(contentStr, "{{PROJECT_NAME}}", name)
-		contentStr = strings.ReplaceAll(contentStr, "{{MODULE_PATH}}", "github.com/"+name)
-		contentStr = strings.ReplaceAll(contentStr, "{{GO_VERSION}}", getGoVersion())
-
-		// Handle .tmpl extension (remove it)
+		// Handle .tmpl extension (remove it) - do this before checking file type
 		if strings.HasSuffix(destPath, ".tmpl") {
 			destPath = strings.TrimSuffix(destPath, ".tmpl")
 			relPath = strings.TrimSuffix(relPath, ".tmpl")
+		}
+
+		// Replace placeholders
+		contentStr := string(content)
+		contentStr = strings.ReplaceAll(contentStr, "{{PROJECT_NAME}}", projectName)
+		contentStr = strings.ReplaceAll(contentStr, "{{MODULE_PATH}}", "github.com/"+projectName)
+		contentStr = strings.ReplaceAll(contentStr, "{{GO_VERSION}}", getGoVersion())
+
+		// Add replace directive for local development if gohtmx isn't published
+		gohtmxPath := getGoHTMXPath()
+		if gohtmxPath != "" && strings.HasSuffix(relPath, "go.mod") {
+			contentStr = strings.ReplaceAll(contentStr, "{{REPLACE_DIRECTIVE}}",
+				fmt.Sprintf("\nreplace github.com/stukennedy/gohtmx => %s\n", gohtmxPath))
+		} else {
+			contentStr = strings.ReplaceAll(contentStr, "{{REPLACE_DIRECTIVE}}", "")
 		}
 
 		// Write file
@@ -130,14 +226,26 @@ func newProject(name string) error {
 		}
 	}
 
+	// Generate templ files if templ is available
+	if _, err := exec.LookPath("templ"); err == nil {
+		fmt.Println("Generating templ files...")
+		cmd := exec.Command("templ", "generate")
+		cmd.Dir = projectDir
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("Warning: templ generate failed: %v\n", err)
+		}
+	}
+
 	fmt.Println()
 	fmt.Println("Project created successfully!")
 	fmt.Println()
 	fmt.Println("Next steps:")
-	fmt.Printf("  cd %s\n", name)
+	fmt.Printf("  cd %s\n", projectDir)
 	fmt.Println("  go mod tidy")
 	fmt.Println("  bun install        # or: npm install")
-	fmt.Println("  ./dev.sh           # start development server")
+	fmt.Println("  gohtmx dev         # start development server")
 	fmt.Println()
 
 	return nil

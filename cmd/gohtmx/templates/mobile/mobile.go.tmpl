@@ -1,0 +1,77 @@
+// Package mobile provides gomobile bindings for iOS and Android.
+// This package re-exports the gohtmx mobile bridge functions and initializes
+// your app's routes when the mobile app starts.
+package mobile
+
+import (
+	"fmt"
+	"net/http"
+
+	"{{MODULE_PATH}}/app"
+	gohtmxmobile "github.com/stukennedy/gohtmx/mobile"
+)
+
+var appRouter http.Handler
+
+// Response is a gomobile-compatible response type.
+// This is defined here so gomobile can export it.
+type Response struct {
+	Status  int
+	Headers string
+	Body    []byte
+}
+
+// BodyString returns the body as a string.
+func (r *Response) BodyString() string {
+	return string(r.Body)
+}
+
+// Initialize sets up the mobile bridge and app routes.
+// Called automatically by native code at app startup.
+func Initialize() {
+	// Set up app routes using shared router setup
+	r := app.NewRouter()
+	appRouter = r.Handler()
+
+	// Initialize the gohtmx bridge with our handler
+	gohtmxmobile.SetHandler(appRouter)
+	gohtmxmobile.Initialize()
+
+	fmt.Println("{{PROJECT_NAME}} mobile initialized")
+}
+
+// HandleRequest processes an HTTP request from the WebView.
+// This is called by native code (Swift/Kotlin) for each request.
+func HandleRequest(method, url, headers string, body []byte) *Response {
+	coreResp := gohtmxmobile.HandleRequest(method, url, headers, body)
+	return &Response{
+		Status:  coreResp.Status,
+		Headers: coreResp.Headers,
+		Body:    coreResp.Body,
+	}
+}
+
+// HandleRequestSimple processes a simple GET request.
+func HandleRequestSimple(method, url string) *Response {
+	coreResp := gohtmxmobile.HandleRequestSimple(method, url)
+	return &Response{
+		Status:  coreResp.Status,
+		Headers: coreResp.Headers,
+		Body:    coreResp.Body,
+	}
+}
+
+// RenderInitialPage returns the initial HTML for the WebView.
+func RenderInitialPage() string {
+	return gohtmxmobile.RenderInitialPage()
+}
+
+// IsReady returns true if the bridge is initialized.
+func IsReady() bool {
+	return gohtmxmobile.IsReady()
+}
+
+// Shutdown cleans up the bridge.
+func Shutdown() {
+	gohtmxmobile.Shutdown()
+}

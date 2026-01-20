@@ -6,55 +6,31 @@ import (
 	"net/http"
 	"os"
 
-	"{{MODULE_PATH}}/handlers"
-	"{{MODULE_PATH}}/templates"
-	"github.com/stukennedy/gohtmx/mobile"
-	"github.com/stukennedy/gohtmx/pkg/render"
-	"github.com/stukennedy/gohtmx/pkg/router"
+	"{{MODULE_PATH}}/app"
 )
 
-var renderer = render.NewTemplRenderer()
-
 func main() {
-	// Check if running as desktop dev server or mobile initialization
+	// Check if running as desktop dev server
 	if len(os.Args) > 1 && os.Args[1] == "serve" {
 		runDevServer()
 		return
 	}
 
-	// Mobile mode: initialize bridge
-	initMobile()
-}
-
-// initMobile sets up the framework for mobile use
-func initMobile() {
-	mobile.Initialize()
-
-	r := setupRouter()
-	mobile.SetHandler(r.Handler())
-
-	fmt.Println("{{PROJECT_NAME}} initialized for mobile")
+	// Default: show usage
+	fmt.Println("{{PROJECT_NAME}} - built with gohtmx")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("  go run . serve     Start development server")
+	fmt.Println("  gohtmx dev         Start dev server with hot reload")
+	fmt.Println("  gohtmx run ios     Build and run on iOS Simulator")
+	fmt.Println("  gohtmx run android Build and run on Android Emulator")
 }
 
 // runDevServer starts an HTTP server for desktop testing
 func runDevServer() {
-	r := setupRouter()
+	r := app.NewRouter()
 
 	port := ":8080"
 	fmt.Printf("Starting dev server at http://localhost%s\n", port)
 	log.Fatal(http.ListenAndServe(port, r.Handler()))
-}
-
-func setupRouter() *router.Router {
-	r := router.New()
-
-	// Home page
-	r.GET("/", func(ctx *router.Context) (string, error) {
-		return renderer.Render(templates.HomePage())
-	})
-
-	// Mount handlers
-	handlers.Mount(r, renderer)
-
-	return r
 }

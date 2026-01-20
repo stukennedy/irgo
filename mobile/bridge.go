@@ -40,12 +40,15 @@ var nativeCallback NativeCallback
 
 // Initialize creates and configures the global bridge.
 // Must be called once at app startup from native code.
+// If the bridge already exists (e.g., from SetHandler), this is a no-op.
 func Initialize() {
 	bridgeMu.Lock()
 	defer bridgeMu.Unlock()
 
-	globalBridge = &Bridge{
-		wsHub: websocket.NewHub(),
+	if globalBridge == nil {
+		globalBridge = &Bridge{
+			wsHub: websocket.NewHub(),
+		}
 	}
 }
 
