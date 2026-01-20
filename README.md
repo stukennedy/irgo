@@ -344,6 +344,437 @@ templ FormWithValidation() {
 }
 ```
 
+## WebSocket Support
+
+GoHTMX supports real-time updates via WebSockets using HTMX 4's `hx-ws` extension. This is perfect for live dashboards, chat applications, notifications, and any feature requiring server-push updates.
+
+### Layout Setup
+
+Include the WebSocket extension script in your layout (already included in the default template):
+
+```html
+<script src="https://four.htmx.org/js/htmx.min.js"></script>
+<script src="https://four.htmx.org/js/ext/hx-ws.js"></script>
+```
+
+Once the script is loaded, just use `hx-ws:connect` on elements - no `hx-ext="ws"` attribute needed.
+
+### WebSocket Handler (Go)
+
+Create a WebSocket handler that manages connections and broadcasts updates:
+
+```go
+// handlers/websocket.go
+package handlers
+
+import (
+    "encoding/json"
+    "log"
+    "net/http"
+    "sync"
+
+    "github.com/gorilla/websocket"
+)
+
+var upgrader = websocket.Upgrader{
+    CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+// Client management
+var (
+    clients   = make(map[*websocket.Conn]bool)
+    clientsMu sync.RWMutex
+)
+
+// WebSocketHandler handles WebSocket connections
+func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
+    conn, err := upgrader.Upgrade(w, r, nil)
+    if err != nil {
+        log.Printf("WebSocket upgrade error: %v", err)
+        return
+    }
+    defer conn.Close()
+
+    // Register client
+    clientsMu.Lock()
+    clients[conn] = true
+    clientsMu.Unlock()
+
+    defer func() {
+        clientsMu.Lock()
+        delete(clients, conn)
+        clientsMu.Unlock()
+    }()
+
+    // Keep connection alive and handle incoming messages
+    for {
+        _, message, err := conn.ReadMessage()
+        if err != nil {
+            break
+        }
+        // Handle incoming messages (e.g., from hx-ws:send)
+        handleMessage(conn, message)
+    }
+}
+
+// Broadcast sends an HTML payload to all connected clients
+func Broadcast(html string) {
+    BroadcastEnvelope(WSEnvelope{
+        Channel: "ui",
+        Format:  "html",
+        Payload: html,
+    })
+}
+
+// WSEnvelope is the HTMX 4 WebSocket message format
+type WSEnvelope struct {
+    Channel   string `json:"channel,omitempty"`    // "ui" for HTML updates
+    Format    string `json:"format,omitempty"`     // "html" for HTML content
+    Target    string `json:"target,omitempty"`     // CSS selector for target
+    Swap      string `json:"swap,omitempty"`       // Swap strategy
+    Payload   string `json:"payload"`              // The HTML content
+    RequestID string `json:"request_id,omitempty"` // For request-response matching
+}
+
+// BroadcastEnvelope sends a structured message to all clients
+func BroadcastEnvelope(env WSEnvelope) {
+    data, _ := json.Marshal(env)
+
+    clientsMu.RLock()
+    defer clientsMu.RUnlock()
+
+    for client := range clients {
+        err := client.WriteMessage(websocket.TextMessage, data)
+        if err != nil {
+            client.Close()
+            delete(clients, client)
+        }
+    }
+}
+```
+
+### Register WebSocket Endpoint
+
+In your `main.go`:
+
+```go
+func runDevServer() {
+    r := app.NewRouter()
+
+    handler := r.Handler()
+    mux := http.NewServeMux()
+
+    // WebSocket endpoint
+    mux.HandleFunc("/ws/updates", handlers.WebSocketHandler)
+
+    mux.Handle("/", handler)
+
+    log.Fatal(http.ListenAndServe(":8080", mux))
+}
+```
+
+### Template with WebSocket Connection
+
+Use `hx-ws:connect` to establish a connection (extension loads automatically):
+
+```go
+// templates/dashboard.templ
+package templates
+
+templ Dashboard() {
+    @Layout("Dashboard") {
+        // hx-ws:connect establishes the WebSocket connection
+        // No hx-ext needed - extension loads automatically
+        <div hx-ws:connect="/ws/updates">
+            <h1 class="text-2xl font-bold mb-4">Live Dashboard</h1>
+
+            // Elements with IDs receive updates when server sends matching HTML
+            <div id="live-data" class="p-4 bg-white rounded shadow">
+                <p class="text-gray-500">Waiting for updates...</p>
+            </div>
+
+            // Server metrics updated in real-time
+            <div id="server-stats" class="mt-4 grid grid-cols-3 gap-4">
+                @ServerStats(0, 0, 0)
+            </div>
+        </div>
+    }
+}
+
+templ ServerStats(cpu int, memory int, requests int) {
+    <div id="server-stats" class="grid grid-cols-3 gap-4">
+        <div class="p-4 bg-blue-100 rounded">
+            <div class="text-sm text-blue-600">CPU</div>
+            <div class="text-2xl font-bold">{ fmt.Sprintf("%d%%", cpu) }</div>
+        </div>
+        <div class="p-4 bg-green-100 rounded">
+            <div class="text-sm text-green-600">Memory</div>
+            <div class="text-2xl font-bold">{ fmt.Sprintf("%d%%", memory) }</div>
+        </div>
+        <div class="p-4 bg-purple-100 rounded">
+            <div class="text-sm text-purple-600">Requests</div>
+            <div class="text-2xl font-bold">{ fmt.Sprintf("%d", requests) }</div>
+        </div>
+    </div>
+}
+```
+
+### Sending Data via WebSocket
+
+Use `hx-ws:send` to send data from the client:
+
+```go
+templ Counter() {
+    <div hx-ws:connect="/ws/counter">
+        <div id="counter">0</div>
+        <button hx-ws:send hx-vals='{"action":"increment"}'>+</button>
+        <button hx-ws:send hx-vals='{"action":"decrement"}'>-</button>
+    </div>
+}
+
+templ ChatForm() {
+    <div hx-ws:connect="/ws/chat" hx-target="#messages" hx-swap="beforeend">
+        <div id="messages"></div>
+        <form hx-ws:send hx-trigger="submit">
+            <input type="text" name="message" placeholder="Type a message..."/>
+            <button type="submit">Send</button>
+        </form>
+    </div>
+}
+```
+
+### Server Message Format (JSON Envelope)
+
+HTMX 4 expects JSON messages with this structure:
+
+```json
+{
+    "channel": "ui",
+    "format": "html",
+    "target": "#element-id",
+    "swap": "innerHTML",
+    "payload": "<div>HTML content</div>",
+    "request_id": "optional-id"
+}
+```
+
+**Minimal message** (uses defaults):
+```json
+{
+    "payload": "<div id=\"stats\">Updated content</div>"
+}
+```
+
+The element ID in the payload determines where content is swapped.
+
+### Broadcasting Updates
+
+Push updates to all connected clients:
+
+```go
+// handlers/stats.go
+package handlers
+
+import (
+    "time"
+    "myapp/templates"
+    "github.com/stukennedy/gohtmx/pkg/render"
+)
+
+var renderer = render.NewTemplRenderer()
+
+// StartStatsBroadcaster pushes stats every second
+func StartStatsBroadcaster() {
+    go func() {
+        for {
+            cpu := getCurrentCPU()
+            memory := getCurrentMemory()
+            requests := getRequestCount()
+
+            // Render the template fragment
+            html, _ := renderer.Render(templates.ServerStats(cpu, memory, requests))
+
+            // Broadcast to all connected clients
+            Broadcast(html)
+
+            time.Sleep(1 * time.Second)
+        }
+    }()
+}
+```
+
+### Example: Live Notifications
+
+```go
+// templates/notifications.templ
+templ NotificationArea() {
+    <div hx-ws:connect="/ws/notifications" class="fixed top-4 right-4 space-y-2">
+        <div id="notifications"></div>
+    </div>
+}
+
+templ Notification(message string, notificationType string) {
+    // hx-swap-oob="afterbegin" prepends to #notifications
+    <div
+        id="notifications"
+        hx-swap-oob="afterbegin"
+    >
+        <div class={ "p-4 rounded shadow-lg",
+            templ.KV("bg-green-500 text-white", notificationType == "success"),
+            templ.KV("bg-red-500 text-white", notificationType == "error"),
+            templ.KV("bg-blue-500 text-white", notificationType == "info") }>
+            { message }
+        </div>
+    </div>
+}
+
+// Usage: push notification to all clients
+func notifyAll(message, msgType string) {
+    html, _ := renderer.Render(templates.Notification(message, msgType))
+    handlers.Broadcast(html)
+}
+```
+
+### Example: Real-Time Resource Monitor
+
+```go
+// templates/resources.templ
+package templates
+
+import "fmt"
+
+type ResourceStats struct {
+    CPUPercent    int
+    MemoryMB      int
+    MemoryPercent int
+    Goroutines    int
+    Requests      uint64
+}
+
+templ ResourceMonitor(stats ResourceStats) {
+    <div id="resource-monitor" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-lg shadow">
+            <div class="text-sm text-gray-500">CPU Usage</div>
+            <div class="text-3xl font-bold text-blue-600">
+                { fmt.Sprintf("%d%%", stats.CPUPercent) }
+            </div>
+            <div class="mt-2 h-2 bg-gray-200 rounded">
+                <div
+                    class="h-full bg-blue-600 rounded"
+                    style={ fmt.Sprintf("width: %d%%", stats.CPUPercent) }
+                ></div>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-lg shadow">
+            <div class="text-sm text-gray-500">Memory</div>
+            <div class="text-3xl font-bold text-green-600">
+                { fmt.Sprintf("%d MB", stats.MemoryMB) }
+            </div>
+            <div class="mt-2 h-2 bg-gray-200 rounded">
+                <div
+                    class="h-full bg-green-600 rounded"
+                    style={ fmt.Sprintf("width: %d%%", stats.MemoryPercent) }
+                ></div>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-lg shadow">
+            <div class="text-sm text-gray-500">Goroutines</div>
+            <div class="text-3xl font-bold text-purple-600">
+                { fmt.Sprintf("%d", stats.Goroutines) }
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-lg shadow">
+            <div class="text-sm text-gray-500">Total Requests</div>
+            <div class="text-3xl font-bold text-orange-600">
+                { fmt.Sprintf("%d", stats.Requests) }
+            </div>
+        </div>
+    </div>
+}
+
+templ ResourcePage() {
+    @Layout("Resource Monitor") {
+        <div hx-ws:connect="/ws/resources" class="p-4">
+            <h1 class="text-2xl font-bold mb-6">System Resources</h1>
+            <div id="resource-monitor">
+                <p class="text-gray-500">Connecting...</p>
+            </div>
+        </div>
+    }
+}
+```
+
+### Client → Server Message Format
+
+When using `hx-ws:send`, HTMX sends JSON:
+
+```json
+{
+    "type": "request",
+    "request_id": "unique-id",
+    "event": "click",
+    "headers": {
+        "HX-Request": "true",
+        "HX-Current-URL": "https://example.com/page",
+        "HX-Trigger": "button-id",
+        "HX-Target": "#target"
+    },
+    "values": { "action": "increment" },
+    "path": "wss://example.com/ws/counter",
+    "id": "button-id"
+}
+```
+
+Handle this in Go:
+
+```go
+type WSRequest struct {
+    Type      string            `json:"type"`
+    RequestID string            `json:"request_id"`
+    Event     string            `json:"event"`
+    Headers   map[string]string `json:"headers"`
+    Values    map[string]any    `json:"values"`
+    Path      string            `json:"path"`
+    ID        string            `json:"id"`
+}
+
+func handleMessage(conn *websocket.Conn, message []byte) {
+    var req WSRequest
+    if err := json.Unmarshal(message, &req); err != nil {
+        return
+    }
+
+    // Handle the action
+    action := req.Values["action"].(string)
+    switch action {
+    case "increment":
+        counter++
+    case "decrement":
+        counter--
+    }
+
+    // Send response back
+    html, _ := renderer.Render(templates.CounterValue(counter))
+    env := WSEnvelope{
+        Payload:   html,
+        RequestID: req.RequestID, // Match request for proper targeting
+    }
+    data, _ := json.Marshal(env)
+    conn.WriteMessage(websocket.TextMessage, data)
+}
+```
+
+### Adding WebSocket Dependency
+
+Add the Gorilla WebSocket package:
+
+```bash
+go get github.com/gorilla/websocket
+```
+
 ## Router API
 
 The router is based on [chi](https://github.com/go-chi/chi) with a simplified API:
