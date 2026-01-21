@@ -123,6 +123,20 @@ version:
 	@go version
 	@echo "Module: $(MODULE)"
 
+# Release targets
+release: release-patch
+
+release-patch:
+	@./scripts/release.sh patch
+
+release-minor:
+	@./scripts/release.sh minor
+
+release-major:
+	@./scripts/release.sh major
+
+.PHONY: release release-patch release-minor release-major
+
 # Help
 help:
 	@echo "Irgo Framework - Build Targets"
@@ -143,3 +157,8 @@ help:
 	@echo ""
 	@echo "Setup:"
 	@echo "  make install-tools - Install dev tools (templ, gomobile, air)"
+	@echo ""
+	@echo "Release:"
+	@echo "  make release       - Release patch version (0.2.2 -> 0.2.3)"
+	@echo "  make release-minor - Release minor version (0.2.2 -> 0.3.0)"
+	@echo "  make release-major - Release major version (0.2.2 -> 1.0.0)"
