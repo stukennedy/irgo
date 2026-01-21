@@ -1,0 +1,2 @@
+# Ignore generated templ files - these are template sources, not Go code
+*_templ.go

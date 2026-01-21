@@ -7,13 +7,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"{{MODULE_PATH}}/app"
+	"{{MODULE_PATH}}/templates"
+	"github.com/stukennedy/irgo/pkg/livereload"
 )
-
-// buildTime is set when the program starts - changes on each rebuild
-var buildTime = time.Now().UnixNano()
 
 func main() {
 	// Check if running as desktop dev server
@@ -33,22 +31,23 @@ func main() {
 	fmt.Println("  irgo run android     Build and run on Android Emulator")
 }
 
-// runDevServer starts an HTTP server for desktop testing
+// runDevServer starts an HTTP server for development with live reload
 func runDevServer() {
-	r := app.NewRouter()
+	// Enable dev mode for templates (enables live reload script)
+	templates.DevMode = true
 
-	// Dev reload endpoint - returns build timestamp for live reload detection
+	r := app.NewRouter()
+	lr := livereload.New()
+
+	// Set up mux with live reload endpoint
 	handler := r.Handler()
 	mux := http.NewServeMux()
-	mux.HandleFunc("/dev/reload", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Content-Type", "text/plain")
-		fmt.Fprintf(w, "%d", buildTime)
-	})
+	mux.HandleFunc("/dev/livereload", lr.Handler())
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	mux.Handle("/", handler)
 
 	port := ":8080"
 	fmt.Printf("Starting dev server at http://localhost%s\n", port)
-	fmt.Printf("Build time: %d\n", buildTime)
+	fmt.Printf("Live reload enabled (build time: %d)\n", lr.BuildTime())
 	log.Fatal(http.ListenAndServe(port, mux))
 }

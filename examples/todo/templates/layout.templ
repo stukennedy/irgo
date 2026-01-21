@@ -1,5 +1,8 @@
 package templates
 
+// DevMode controls whether live reload is enabled (set by dev server)
+var DevMode bool
+
 templ Layout(title string) {
 	<!DOCTYPE html>
 	<html lang="en">
@@ -15,8 +18,51 @@ templ Layout(title string) {
 		</head>
 		<body class="bg-gray-100 min-h-screen">
 			{ children... }
+			if DevMode {
+				@livereloadScript()
+			}
 		</body>
 	</html>
+}
+
+templ livereloadScript() {
+	<script>
+(function() {
+  if (typeof window === 'undefined') return;
+
+  var buildTime = null;
+  var retryDelay = 1000;
+  var maxRetryDelay = 5000;
+
+  function connect() {
+    var es = new EventSource('/dev/livereload');
+
+    es.addEventListener('buildtime', function(e) {
+      var serverBuildTime = e.data;
+      if (buildTime !== null && buildTime !== serverBuildTime) {
+        console.log('[livereload] Server restarted, reloading...');
+        window.location.reload();
+      }
+      buildTime = serverBuildTime;
+      retryDelay = 1000;
+    });
+
+    es.addEventListener('reload', function(e) {
+      console.log('[livereload] Reload signal received');
+      window.location.reload();
+    });
+
+    es.onerror = function() {
+      es.close();
+      console.log('[livereload] Connection lost, reconnecting in ' + retryDelay + 'ms...');
+      setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 1.5, maxRetryDelay);
+    };
+  }
+
+  connect();
+})();
+</script>
 }
 
 templ Page(title string) {

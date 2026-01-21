@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/stukennedy/irgo/examples/todo/templates"
 	"github.com/stukennedy/irgo/mobile"
+	"github.com/stukennedy/irgo/pkg/livereload"
 )
 
 func main() {
@@ -37,14 +39,25 @@ func initMobile() {
 	fmt.Println("Todo app initialized for mobile")
 }
 
-// runDevServer starts an HTTP server for desktop testing
+// runDevServer starts an HTTP server for development with live reload
 func runDevServer() {
+	// Enable dev mode for templates (enables live reload script)
+	templates.DevMode = true
+
 	r := setupRouter()
+	lr := livereload.New()
 
 	// Add sample data
 	addSampleData()
 
+	// Set up mux with live reload endpoint
+	mux := http.NewServeMux()
+	mux.HandleFunc("/dev/livereload", lr.Handler())
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	mux.Handle("/", r.Handler())
+
 	port := ":8080"
 	fmt.Printf("Starting dev server at http://localhost%s\n", port)
-	log.Fatal(http.ListenAndServe(port, r.Handler()))
+	fmt.Printf("Live reload enabled (build time: %d)\n", lr.BuildTime())
+	log.Fatal(http.ListenAndServe(port, mux))
 }

@@ -156,10 +156,35 @@ func getIrgoPath() string {
 	return ""
 }
 
+// isRemoteModulePath checks if a path looks like a remote Go module path
+func isRemoteModulePath(path string) bool {
+	remotePrefixes := []string{
+		"github.com/",
+		"gitlab.com/",
+		"bitbucket.org/",
+		"gopkg.in/",
+	}
+	for _, prefix := range remotePrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	// Any path with dots before slashes is likely remote
+	if strings.Contains(path, ".") && strings.Contains(path, "/") {
+		dotIdx := strings.Index(path, ".")
+		slashIdx := strings.Index(path, "/")
+		if dotIdx < slashIdx {
+			return true
+		}
+	}
+	return false
+}
+
 func newProject(name string) error {
-	// Determine project directory and project name
+	// Determine project directory, project name, and module path
 	var projectDir string
 	var projectName string
+	var modulePath string
 
 	if name == "." {
 		cwd, err := os.Getwd()
@@ -168,13 +193,22 @@ func newProject(name string) error {
 		}
 		projectDir = cwd
 		projectName = filepath.Base(cwd)
+		modulePath = projectName
 	} else if filepath.IsAbs(name) {
 		// Absolute path provided
 		projectDir = name
 		projectName = filepath.Base(name)
+		modulePath = projectName
+	} else if isRemoteModulePath(name) {
+		// Remote module path like "github.com/user/project"
+		// Use the last part for directory, full path for module
+		projectDir = filepath.Base(name)
+		projectName = filepath.Base(name)
+		modulePath = name
 	} else {
 		projectDir = name
 		projectName = name
+		modulePath = name
 	}
 
 	// Check if directory exists and is not empty
@@ -238,7 +272,7 @@ func newProject(name string) error {
 		// Replace placeholders
 		contentStr := string(content)
 		contentStr = strings.ReplaceAll(contentStr, "{{PROJECT_NAME}}", projectName)
-		contentStr = strings.ReplaceAll(contentStr, "{{MODULE_PATH}}", projectName)
+		contentStr = strings.ReplaceAll(contentStr, "{{MODULE_PATH}}", modulePath)
 		contentStr = strings.ReplaceAll(contentStr, "{{GO_VERSION}}", getGoVersion())
 
 		// Add replace directive for local development if irgo isn't published
@@ -280,13 +314,18 @@ func newProject(name string) error {
 	}
 
 	// Run go mod tidy to download dependencies
-	fmt.Println("Running go mod tidy...")
-	tidyCmd := exec.Command("go", "mod", "tidy")
-	tidyCmd.Dir = projectDir
-	tidyCmd.Stdout = os.Stdout
-	tidyCmd.Stderr = os.Stderr
-	if err := tidyCmd.Run(); err != nil {
-		fmt.Printf("Warning: go mod tidy failed: %v\n", err)
+	// Skip if it's a remote module path that doesn't exist yet
+	if isRemoteModulePath(modulePath) {
+		fmt.Println("Skipping go mod tidy (remote module path - run manually after pushing to remote)")
+	} else {
+		fmt.Println("Running go mod tidy...")
+		tidyCmd := exec.Command("go", "mod", "tidy")
+		tidyCmd.Dir = projectDir
+		tidyCmd.Stdout = os.Stdout
+		tidyCmd.Stderr = os.Stderr
+		if err := tidyCmd.Run(); err != nil {
+			fmt.Printf("Warning: go mod tidy failed: %v\n", err)
+		}
 	}
 
 	// Generate templ files if templ is available
