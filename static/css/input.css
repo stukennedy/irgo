@@ -1,19 +1,16 @@
 @import "tailwindcss";
 
-/* HTMX loading indicators */
-.htmx-indicator {
+/* Datastar loading indicators */
+.loading-indicator {
     opacity: 0;
     transition: opacity 200ms ease-in;
 }
-.htmx-request .htmx-indicator {
-    opacity: 1;
-}
-.htmx-request.htmx-indicator {
+.loading-indicator.active {
     opacity: 1;
 }
 
-/* Smooth swap transitions */
-.htmx-swapping {
+/* Smooth transitions for content swaps */
+.swap-transition {
     opacity: 0;
     transition: opacity 100ms ease-out;
 }

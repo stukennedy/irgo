@@ -52,19 +52,19 @@ resp := client.Patch("/path", body)
 resp := client.Delete("/path")
 ```
 
-### HTMX Requests
+### Datastar SSE Requests
 
-Test HTMX-specific behavior:
+Test Datastar-specific behavior:
 
 ```go
-// Make request with HX-Request header
-resp := client.HTMX().Get("/fragment")
+// Make request with Accept: text/event-stream header (SSE)
+resp := client.Datastar().Get("/data")
 
 // With specific target
-resp := client.HTMXWithTarget("#content").Get("/fragment")
+resp := client.DatastarWithTarget("#content").Get("/data")
 
 // Custom headers
-resp := client.WithHeader("HX-Trigger", "button-1").Get("/path")
+resp := client.WithHeader("Accept", "text/event-stream").Get("/path")
 ```
 
 ## Response Assertions
@@ -100,12 +100,12 @@ resp.AssertHTML(t)                           // Content-Type is text/html
 resp.AssertJSON(t)                           // Content-Type is application/json
 ```
 
-### HTMX Response Headers
+### SSE Response Assertions
 
 ```go
-resp.AssertHTMXTrigger(t, "itemCreated")    // HX-Trigger header
-resp.AssertHTMXRedirect(t, "/new-url")      // HX-Redirect header
-resp.AssertHTMXRefresh(t)                    // HX-Refresh header
+resp.AssertSSE(t)                            // Content-Type is text/event-stream
+resp.AssertContains(t, "event: datastar-patch")  // Check for SSE event
+resp.AssertContains(t, "data: fragment")     // Check for SSE data
 ```
 
 ### HTML Assertions
@@ -125,7 +125,7 @@ For more complex requests, use the fluent request builder:
 resp := irgotest.NewRequest("POST", "/users").
     WithHeader("Authorization", "Bearer token").
     WithFormBody(map[string]string{"name": "John"}).
-    AsHTMX().
+    AsDatastar().
     Execute(handler)
 
 resp.AssertCreated(t)
@@ -157,12 +157,12 @@ func TestTodoHandlers(t *testing.T) {
     })
 
     t.Run("create todo", func(t *testing.T) {
-        resp := client.HTMX().PostForm("/todos", map[string]string{
+        resp := client.Datastar().PostForm("/todos", map[string]string{
             "title": "New Todo",
         })
         resp.AssertOK(t)
         resp.AssertContains(t, "New Todo")
-        resp.HTML(t).ContainsElement("div", "hx-delete")
+        resp.HTML(t).ContainsElement("div", "data-on:click")
     })
 
     t.Run("create todo validation", func(t *testing.T) {
@@ -176,14 +176,14 @@ func TestTodoHandlers(t *testing.T) {
     t.Run("delete todo", func(t *testing.T) {
         // First create a todo
         client.PostForm("/todos", map[string]string{"title": "To Delete"})
-        
+
         // Then delete it
-        resp := client.HTMX().Delete("/todos/1")
+        resp := client.Datastar().Delete("/todos/1")
         resp.AssertOK(t)
     })
 
     t.Run("toggle todo", func(t *testing.T) {
-        resp := client.HTMX().Post("/todos/1/toggle", nil)
+        resp := client.Datastar().Post("/todos/1/toggle", nil)
         resp.AssertOK(t)
         resp.HTML(t).ContainsClass("completed")
     })
@@ -220,7 +220,7 @@ func TestTodoItemTemplate(t *testing.T) {
         t.Error("expected template to contain todo title")
     }
     
-    if !strings.Contains(html, `hx-delete="/todos/1"`) {
+    if !strings.Contains(html, `data-on:click="@delete('/todos/1')"`) {
         t.Error("expected template to contain delete button")
     }
 }
@@ -307,17 +307,17 @@ go tool cover -html=coverage.out
 
 1. **Test handlers in isolation**: Create a new router for each test to avoid state leakage.
 
-2. **Test both HTMX and regular requests**: Your handlers may behave differently.
+2. **Test both standard and Datastar SSE requests**: Your handlers may behave differently.
 
    ```go
    t.Run("regular request", func(t *testing.T) {
        resp := client.Get("/page")
        // Full page expected
    })
-   
-   t.Run("htmx request", func(t *testing.T) {
-       resp := client.HTMX().Get("/page")
-       // Fragment expected
+
+   t.Run("datastar request", func(t *testing.T) {
+       resp := client.Datastar().Get("/page")
+       // SSE fragment expected
    })
    ```
 
@@ -351,9 +351,10 @@ go tool cover -html=coverage.out
    }
    ```
 
-5. **Test HTMX response headers** when your handlers set them:
+5. **Test SSE responses** when your handlers return them:
 
    ```go
-   resp := client.HTMX().Delete("/items/1")
-   resp.AssertHTMXTrigger(t, "itemDeleted")
+   resp := client.Datastar().Delete("/items/1")
+   resp.AssertSSE(t)
+   resp.AssertContains(t, "datastar-remove")
    ```

@@ -1,7 +1,7 @@
 /**
- * Irgo Bridge - Virtual HTTP and WebSocket for HTMX 4
+ * Irgo Bridge - Virtual HTTP and WebSocket for Datastar
  *
- * This script intercepts HTTP requests and WebSocket connections from HTMX
+ * This script intercepts HTTP requests and WebSocket connections from Datastar
  * and routes them through the native bridge (iOS/Android) to the Go framework.
  *
  * On desktop/web, it falls back to real network requests.
@@ -362,104 +362,6 @@
   };
 
   // ========================================
-  // HTMX EXTENSION FOR HTTP INTERCEPTION
-  // ========================================
-
-  if (typeof htmx !== "undefined") {
-    htmx.defineExtension("irgo-bridge", {
-      init: function (api) {
-        console.log("[irgo] Bridge extension initialized, native:", isNative);
-      },
-
-      onEvent: function (name, evt) {
-        // Only intercept on native platforms
-        if (!isNative) {
-          return true;
-        }
-
-        if (name === "htmx:beforeRequest") {
-          // Intercept the request
-          const xhr = evt.detail.xhr;
-          const elt = evt.detail.elt;
-          const target = evt.detail.target;
-
-          // Get request details
-          const method = evt.detail.verb?.toUpperCase() || "GET";
-          let url = evt.detail.path || evt.detail.pathInfo?.finalRequestPath;
-
-          // Convert to irgo:// scheme if relative
-          if (url && !url.startsWith("http") && !url.startsWith("irgo://")) {
-            url = "irgo://app" + (url.startsWith("/") ? "" : "/") + url;
-          }
-
-          // Collect headers
-          const headers = {
-            "HX-Request": "true",
-            "HX-Current-URL": window.location.href,
-            "HX-Target": target?.id || "",
-            "HX-Trigger": elt?.id || "",
-          };
-
-          // Get body
-          let body = null;
-          if (evt.detail.requestConfig?.parameters) {
-            body = new URLSearchParams(
-              evt.detail.requestConfig.parameters,
-            ).toString();
-            headers["Content-Type"] = "application/x-www-form-urlencoded";
-          }
-
-          // Make the request through native bridge
-          evt.preventDefault();
-
-          NativeBridge.httpRequest(method, url, headers, body)
-            .then((response) => {
-              // Process HTMX headers
-              const hxHeaders = response.headers || {};
-
-              // Handle HX-Redirect
-              if (hxHeaders["HX-Redirect"]) {
-                window.location.href = hxHeaders["HX-Redirect"];
-                return;
-              }
-
-              // Handle HX-Refresh
-              if (hxHeaders["HX-Refresh"] === "true") {
-                window.location.reload();
-                return;
-              }
-
-              // Swap content
-              if (target && response.body) {
-                const swapStyle =
-                  hxHeaders["HX-Reswap"] ||
-                  evt.detail.swapSpec?.swapStyle ||
-                  "innerHTML";
-
-                htmx.swap(target, response.body, {
-                  swapStyle: swapStyle,
-                });
-              }
-
-              // Handle HX-Trigger
-              if (hxHeaders["HX-Trigger"]) {
-                htmx.trigger(document.body, hxHeaders["HX-Trigger"]);
-              }
-            })
-            .catch((error) => {
-              console.error("[irgo] Request error:", error);
-              htmx.trigger(elt, "htmx:responseError", { error });
-            });
-
-          return false;
-        }
-
-        return true;
-      },
-    });
-  }
-
-  // ========================================
   // UTILITY FUNCTIONS
   // ========================================
 
@@ -517,18 +419,7 @@
   // DESKTOP SECURITY - INJECT SECRET INTO ALL REQUESTS
   // ========================================
 
-  // Configure HTMX to add secret header to all requests (desktop mode)
-  if (typeof htmx !== "undefined" && !isNative) {
-    // Add secret header to all HTMX requests
-    document.body.addEventListener("htmx:configRequest", function (evt) {
-      const secret = getSecret();
-      if (secret) {
-        evt.detail.headers["X-Irgo-Secret"] = secret;
-      }
-    });
-  }
-
-  // Patch fetch to add secret header (for any direct fetch calls)
+  // Patch fetch to add secret header (Datastar uses fetch for all requests)
   if (!isNative && getSecret()) {
     window.fetch = function (input, init) {
       init = init || {};
@@ -596,10 +487,7 @@
 
     // Navigate programmatically
     navigate: function (path) {
-      htmx.ajax("GET", path, {
-        target: "body",
-        swap: "innerHTML",
-      });
+      window.location.href = path;
     },
 
     // Get WebSocket sessions

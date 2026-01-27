@@ -26,6 +26,8 @@ type Config struct {
 	Debug     bool   // Enable webview devtools
 	Port      int    // 0 = auto-select available port
 	Transport string // "loopback" (default) or "inprocess"
+	Version   string // App version (shown in About menu on macOS)
+	SetupMenu bool   // Setup native menu bar (macOS)
 }
 
 // DefaultConfig returns sensible defaults for a desktop app
@@ -38,6 +40,8 @@ func DefaultConfig() Config {
 		Debug:     false,
 		Port:      0,
 		Transport: "loopback",
+		Version:   "1.0.0",
+		SetupMenu: true,
 	}
 }
 
@@ -71,6 +75,11 @@ func NewWithHub(handler http.Handler, wsHub *ws.Hub, config Config) *App {
 
 // Run starts the desktop app (blocking until window is closed)
 func (a *App) Run() error {
+	// Setup native menu bar if enabled
+	if a.config.SetupMenu {
+		SetupMenu(a.config.Title, a.config.Version)
+	}
+
 	// Determine transport type from config or environment
 	transportType := a.config.Transport
 	if env := os.Getenv("IRGO_TRANSPORT"); env != "" {

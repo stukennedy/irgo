@@ -41,18 +41,7 @@ open class IrgoWebViewController: UIViewController {
                 return originalFetch(url, init);
             };
 
-            // Configure HTMX to use irgo:// scheme
-            if (typeof htmx !== 'undefined') {
-                // HTMX 4 event for modifying requests
-                document.body.addEventListener('htmx:configRequest', function(evt) {
-                    let path = evt.detail.path;
-                    if (path.startsWith('/')) {
-                        evt.detail.path = 'irgo://app' + path;
-                    } else if (!path.includes('://')) {
-                        evt.detail.path = 'irgo://app/' + path;
-                    }
-                });
-            }
+            // Datastar uses fetch for SSE requests, which is already intercepted above
 
             console.log('Irgo bridge initialized');
         })();

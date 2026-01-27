@@ -29,7 +29,7 @@ type NativeCallback interface {
 	// OnHTMLUpdate is called when new HTML should be swapped into the WebView.
 	OnHTMLUpdate(targetSelector string, html string, swapStrategy string)
 
-	// OnTrigger is called when HTMX triggers should fire.
+	// OnTrigger is called when client-side events should fire.
 	OnTrigger(eventName string, detail string)
 
 	// OnError is called when an error occurs.

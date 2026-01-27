@@ -40,7 +40,7 @@ func SetWebSocketCallback(cb WebSocketCallback) {
 
 // WebSocketConnect creates a new WebSocket session.
 // Returns the session ID.
-// Called from JavaScript when HTMX creates a WebSocket connection.
+// Called from JavaScript when a WebSocket connection is requested.
 func WebSocketConnect(url string) (string, error) {
 	hub := GetHub()
 	if hub == nil {
@@ -75,7 +75,7 @@ func WebSocketConnectWithID(sessionID, url string) error {
 }
 
 // WebSocketSend sends a message from the WebView to Go.
-// data is the JSON message from HTMX (websocket.Request format).
+// data is the JSON message in websocket.Request format.
 // Returns the response envelope as JSON, or empty string if no immediate response.
 func WebSocketSend(sessionID string, data string) (string, error) {
 	hub := GetHub()

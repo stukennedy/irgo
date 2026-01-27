@@ -211,7 +211,7 @@ func (t *LoopbackTransport) Start() error {
 
 	// Security middleware (applied in reverse order)
 	handler = router.WebSocketSecretMiddleware(t.config.Secret)(handler)
-	handler = router.SecretValidationMiddleware(t.config.Secret, []string{"/static/"})(handler)
+	handler = router.SecretValidationMiddleware(t.config.Secret, []string{"/static/", "/api/"})(handler)
 	handler = router.StrictOriginMiddleware(t.config.AllowedOrigins...)(handler)
 	handler = router.CORSMiddleware(t.config.AllowedOrigins...)(handler)
 

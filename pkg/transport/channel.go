@@ -95,7 +95,7 @@ type Message struct {
 	// Format indicates the payload format: "html" or "json"
 	Format string `json:"format,omitempty"`
 
-	// Target is the DOM selector for HTML swaps (HTMX target)
+	// Target is the DOM selector for HTML swaps
 	Target string `json:"target,omitempty"`
 
 	// Swap is the swap strategy (innerHTML, outerHTML, beforeend, etc.)
@@ -104,7 +104,7 @@ type Message struct {
 	// Payload is the message content
 	Payload []byte `json:"payload"`
 
-	// Headers contains request headers (e.g., HTMX headers)
+	// Headers contains request headers
 	Headers map[string]string `json:"headers,omitempty"`
 
 	// Values contains form data and hx-vals

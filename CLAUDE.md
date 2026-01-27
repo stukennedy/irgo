@@ -211,7 +211,7 @@ html, err := renderer.Render(templates.MyComponent(data))
 
 ### `github.com/stukennedy/irgo/desktop`
 
-Desktop application support (webview + HTTP server).
+Desktop application support (webview + HTTP server + native menus).
 
 ```go
 import "github.com/stukennedy/irgo/desktop"
@@ -224,6 +224,8 @@ config := desktop.Config{
     Resizable: true,
     Debug:     false,  // Enable browser devtools
     Port:      0,      // 0 = auto-select
+    Version:   "1.0.0", // Shown in About menu (macOS)
+    SetupMenu: true,    // Setup native menu bar (macOS)
 }
 
 // Or use defaults
@@ -233,12 +235,25 @@ config := desktop.DefaultConfig()
 app := desktop.New(httpHandler, config)
 
 // Run (blocks until window closed)
+// On macOS, this sets up the native menu bar automatically if SetupMenu is true
 err := app.Run()
 
 // Utilities
 staticDir := desktop.FindStaticDir()      // Find static files
 resourcePath := desktop.FindResourcePath() // Find bundled resources
+
+// Manual menu setup (if SetupMenu is false)
+desktop.SetupMenu("App Name", "1.0.0")
 ```
+
+#### Native macOS Menu
+
+When `SetupMenu: true` (default), the app automatically creates standard macOS menus:
+- **App Menu**: About, Hide, Hide Others, Show All, Quit
+- **Edit Menu**: Undo, Redo, Cut, Copy, Paste, Select All
+- **Window Menu**: Minimize, Zoom, Bring All to Front
+
+This uses CGO with Objective-C to call Cocoa APIs. On non-macOS platforms, `SetupMenu` is a no-op.
 
 ### `github.com/stukennedy/irgo/mobile`
 
@@ -659,6 +674,50 @@ irgo run android         # Build + run Android
 irgo templ               # Generate templ files
 irgo install-tools       # Install dev dependencies
 ```
+
+## macOS App Bundling
+
+The framework includes scripts for creating macOS `.app` bundles and DMG installers in `build/macos/`:
+
+### Icon Generation
+
+```bash
+# Generate .icns from a 1024x1024 PNG
+./build/macos/generate-icns.sh static/icon.png build/macos/icon.icns
+```
+
+### App Bundle Creation
+
+```bash
+# Create a .app bundle
+./build/macos/create-app-bundle.sh \
+  --binary dist/myapp \
+  --name "My App" \
+  --bundle-id com.example.myapp \
+  --icon build/macos/icon.icns \
+  --static static \
+  --version 1.2.3
+```
+
+### DMG Creation
+
+```bash
+# Create a DMG installer (optionally signed and notarized)
+./build/macos/create-dmg.sh \
+  --app "dist/My App.app" \
+  --name "My App" \
+  --version 1.2.3
+
+# With code signing (set environment variables)
+export APPLE_DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)"
+export APPLE_NOTARY_PROFILE="my-notary-profile"
+./build/macos/create-dmg.sh --app "dist/My App.app" --name "My App"
+```
+
+### Build Configuration Files
+
+- `build/macos/Info.plist.tmpl` - App bundle metadata template
+- `build/macos/entitlements.plist` - Code signing entitlements for hardened runtime
 
 ## Build Tags
 

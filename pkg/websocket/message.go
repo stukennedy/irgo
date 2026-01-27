@@ -1,19 +1,19 @@
-// Package websocket provides virtual WebSocket support for HTMX 4.
+// Package websocket provides virtual WebSocket support for real-time communication.
 // It enables bidirectional communication between the WebView and Go
-// without actual network sockets.
+// without actual network sockets, complementing Datastar's SSE-based updates.
 package websocket
 
 import (
 	"encoding/json"
 )
 
-// Request represents a message from the client (HTMX hx-ws:send).
-// This matches the HTMX 4 WebSocket extension message format.
+// Request represents a message from the client via WebSocket.
+// Used for real-time bidirectional communication alongside Datastar's SSE.
 type Request struct {
 	Type      string            `json:"type"`                 // Always "request" for client messages
 	RequestID string            `json:"request_id"`           // Unique ID for request-response matching
 	Event     string            `json:"event"`                // DOM event that triggered the send (click, submit, etc.)
-	Headers   map[string]string `json:"headers"`              // HTMX headers (HX-Request, HX-Target, etc.)
+	Headers   map[string]string `json:"headers"`              // Request headers
 	Values    map[string]any    `json:"values"`               // Form data and hx-vals
 	Path      string            `json:"path"`                 // Normalized WebSocket URL
 	ID        string            `json:"id,omitempty"`         // Element ID (if element has id attribute)
@@ -32,7 +32,7 @@ func (r *Request) GetStringValue(key string) string {
 	return ""
 }
 
-// GetHeader returns an HTMX header value.
+// GetHeader returns a header value.
 func (r *Request) GetHeader(key string) string {
 	return r.Headers[key]
 }
@@ -48,7 +48,7 @@ func (r *Request) CurrentURL() string {
 }
 
 // Envelope represents a message from the server to the client.
-// This matches the HTMX 4 WebSocket extension response format.
+// Used for WebSocket-based real-time updates.
 type Envelope struct {
 	Channel   string `json:"channel,omitempty"`    // Channel identifier (default: "ui")
 	Format    string `json:"format,omitempty"`     // Message format (default: "html")
