@@ -3,6 +3,11 @@ bin/
 build/
 tmp/
 
+# Android build outputs
+android/Example/.gradle/
+# Contains the machine-local Android SDK path (auto-written by `irgo run android`)
+android/Example/local.properties
+
 # Dependencies
 node_modules/
 vendor/

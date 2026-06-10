@@ -13,8 +13,15 @@ import java.io.ByteArrayInputStream
 open class IrgoWebViewClient : WebViewClient() {
 
     companion object {
-        const val SCHEME = "irgo"
-        const val HOST = "app"
+        // The bridge intercepts all requests under http://localhost/ and routes
+        // them to Go. No real network socket is opened — WebViewClient.
+        // shouldInterceptRequest serves the response directly from Go memory.
+        //
+        // We use http://localhost (instead of a custom scheme like irgo://)
+        // because Android WebView's Fetch API rejects custom URL schemes at the
+        // JS layer before shouldInterceptRequest can run. http://localhost is on
+        // the Fetch allowlist, so all Datastar SSE requests work transparently.
+        const val HOST = "localhost"
     }
 
     override fun shouldInterceptRequest(
@@ -23,12 +30,13 @@ open class IrgoWebViewClient : WebViewClient() {
     ): WebResourceResponse? {
         val url = request?.url ?: return null
 
-        // Only intercept irgo:// scheme
-        if (url.scheme != SCHEME) {
+        // Only intercept http://localhost/* — anything else (https://api.example.com,
+        // file://, etc.) is allowed to fall through to the network layer.
+        if (url.scheme != "http" || url.host != HOST) {
             return super.shouldInterceptRequest(view, request)
         }
 
-        // Convert irgo://app/path?query -> /path?query
+        // Convert http://localhost/path?query -> /path?query
         var path = url.path ?: "/"
         if (path.isEmpty()) {
             path = "/"
@@ -70,13 +78,12 @@ open class IrgoWebViewClient : WebViewClient() {
     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
         val url = request?.url ?: return false
 
-        // Allow irgo:// scheme
-        if (url.scheme == SCHEME) {
-            return false // Let WebView handle it (will be intercepted)
+        // Let WebView handle http://localhost (will be intercepted by shouldInterceptRequest).
+        if (url.scheme == "http" && url.host == HOST) {
+            return false
         }
 
-        // For external URLs, could open in browser
-        // For now, allow them
+        // External URLs fall through to the default handling.
         return false
     }
 

@@ -9,6 +9,12 @@ import (
 
 	"{{MODULE_PATH}}/app"
 	irgomobile "github.com/stukennedy/irgo/mobile"
+
+	// Blank import to record golang.org/x/mobile/bind as a direct
+	// dependency. gomobile bind's pre-flight check walks the package
+	// graph for it and refuses to run otherwise. This package is the
+	// runtime gomobile compiles against; importing it has no other effect.
+	_ "golang.org/x/mobile/bind"
 )
 
 var appRouter http.Handler

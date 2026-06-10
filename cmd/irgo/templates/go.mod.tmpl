@@ -3,7 +3,10 @@ module {{MODULE_PATH}}
 go {{GO_VERSION}}
 
 require (
-	github.com/a-h/templ v0.3.977
+	github.com/a-h/templ v0.3.1020
 	github.com/stukennedy/irgo v0.2.2
+	// golang.org/x/mobile/bind is imported (blank) from ./mobile so that
+	// gomobile bind sees it as a direct dependency. See mobile/mobile.go.
+	golang.org/x/mobile v0.0.0-20260602190626-68735029466e
 )
 {{REPLACE_DIRECTIVE}}

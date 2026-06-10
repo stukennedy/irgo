@@ -56,14 +56,14 @@ ios: build
 # Build Android AAR (requires Android SDK)
 android: build
 	@mkdir -p $(BUILD_DIR)/android
-	gomobile bind -target android -o $(ANDROID_OUT) $(MODULE)/mobile
+	gomobile bind -target android -androidapi 24 -javapkg irgo -o $(ANDROID_OUT) $(MODULE)/mobile
 	@echo ""
 	@echo "Android AAR built: $(ANDROID_OUT)"
 	@echo ""
 	@echo "To use in Android Studio:"
 	@echo "  1. Copy $(ANDROID_OUT) to app/libs/"
 	@echo "  2. Add to build.gradle: implementation files('libs/irgo.aar')"
-	@echo "  3. Copy android/app/src/main/kotlin/com/irgo/*.kt to your project"
+	@echo "  3. Copy android/Example/app/src/main/kotlin/com/irgo/*.kt to your project"
 	@echo "  4. Extend IrgoActivity in your MainActivity"
 
 # Bundle JavaScript

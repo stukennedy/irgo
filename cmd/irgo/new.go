@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-//go:embed templates/*
+//go:embed all:templates
 var templateFS embed.FS
 
 // Datastar files to download during project creation
@@ -155,6 +155,36 @@ func getIrgoPath() string {
 	return ""
 }
 
+// sanitizeIdentifier converts a project name into a form usable as a Java/Kotlin
+// package fragment or Go package name. Specifically:
+//   - non-alphanumeric characters (other than _) are replaced with underscores
+//   - leading digits are prefixed with `app` (Java doesn't allow identifiers to
+//     start with a digit)
+//   - the empty string becomes "app"
+//
+// Examples: "my-app" -> "my_app", "123game" -> "app123game", "hi" -> "hi".
+func sanitizeIdentifier(name string) string {
+	if name == "" {
+		return "app"
+	}
+	var b strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	result := b.String()
+	if len(result) > 0 && result[0] >= '0' && result[0] <= '9' {
+		result = "app" + result
+	}
+	if result == "" {
+		return "app"
+	}
+	return result
+}
+
 // isRemoteModulePath checks if a path looks like a remote Go module path
 func isRemoteModulePath(path string) bool {
 	remotePrefixes := []string{
@@ -250,6 +280,20 @@ func newProject(name string) error {
 
 		// Get relative path from templates/
 		relPath := strings.TrimPrefix(path, "templates/")
+
+		// projectIdent is a sanitized form of projectName usable as a Java/Kotlin
+		// package fragment and a Go package name. Hyphens and other non-alphanumeric
+		// characters are replaced with underscores so things like "my-app" produce
+		// the valid package "my_app" in com.irgo.my_app.
+		projectIdent := sanitizeIdentifier(projectName)
+
+		// Allow {{PROJECT_NAME}} substitution inside paths. This is how the
+		// scaffold places files like android/Example/app/src/main/kotlin/com/irgo/{{PROJECT_NAME}}/MainActivity.kt
+		// into the right package directory for the user's project name. We use
+		// the sanitized form in paths since real package directories must be
+		// valid Java identifiers.
+		relPath = strings.ReplaceAll(relPath, "{{PROJECT_NAME}}", projectIdent)
+
 		destPath := filepath.Join(projectDir, relPath)
 
 		if d.IsDir() {
@@ -271,6 +315,7 @@ func newProject(name string) error {
 		// Replace placeholders
 		contentStr := string(content)
 		contentStr = strings.ReplaceAll(contentStr, "{{PROJECT_NAME}}", projectName)
+		contentStr = strings.ReplaceAll(contentStr, "{{PROJECT_IDENT}}", sanitizeIdentifier(projectName))
 		contentStr = strings.ReplaceAll(contentStr, "{{MODULE_PATH}}", modulePath)
 		contentStr = strings.ReplaceAll(contentStr, "{{GO_VERSION}}", getGoVersion())
 
@@ -303,7 +348,7 @@ func newProject(name string) error {
 	}
 
 	// Make scripts executable
-	scripts := []string{"dev.sh"}
+	scripts := []string{"dev.sh", "android/Example/gradlew"}
 	for _, script := range scripts {
 		path := filepath.Join(projectDir, script)
 		if err := os.Chmod(path, 0755); err != nil {
@@ -339,12 +384,47 @@ func newProject(name string) error {
 		}
 	}
 
+	// Install JS deps and build Tailwind CSS so the project is runnable out
+	// of the box. We prefer bun (faster); fall back to npm. If neither is
+	// installed, print instructions and move on — the project still builds
+	// with a missing output.css, the page just renders unstyled until the
+	// user runs `bun install && bun run css`.
+	installedCSS := false
+	for _, tool := range []string{"bun", "npm"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			continue
+		}
+		fmt.Printf("Installing JS dependencies with %s...\n", tool)
+		installCmd := exec.Command(tool, "install")
+		installCmd.Dir = projectDir
+		installCmd.Stdout = os.Stdout
+		installCmd.Stderr = os.Stderr
+		if err := installCmd.Run(); err != nil {
+			fmt.Printf("Warning: %s install failed: %v\n", tool, err)
+			break
+		}
+		fmt.Println("Building Tailwind CSS...")
+		cssCmd := exec.Command(tool, "run", "css")
+		cssCmd.Dir = projectDir
+		cssCmd.Stdout = os.Stdout
+		cssCmd.Stderr = os.Stderr
+		if err := cssCmd.Run(); err != nil {
+			fmt.Printf("Warning: tailwind build failed: %v\n", err)
+		} else {
+			installedCSS = true
+		}
+		break
+	}
+
 	fmt.Println()
 	fmt.Println("Project created successfully!")
 	fmt.Println()
 	fmt.Println("Next steps:")
 	fmt.Printf("  cd %s\n", projectDir)
-	fmt.Println("  bun install        # or: npm install")
+	if !installedCSS {
+		fmt.Println("  bun install        # or: npm install")
+		fmt.Println("  bun run css        # build Tailwind CSS")
+	}
 	fmt.Println("  irgo dev           # start development server")
 	fmt.Println()
 

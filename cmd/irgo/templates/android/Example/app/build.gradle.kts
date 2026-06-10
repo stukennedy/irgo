@@ -4,11 +4,12 @@ plugins {
 }
 
 android {
-    namespace = "com.irgo.example"
+    // Change this before publishing — must be globally unique on the Play Store.
+    namespace = "com.irgo.{{PROJECT_IDENT}}"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.irgo.example"
+        applicationId = "com.irgo.{{PROJECT_IDENT}}"
         minSdk = 24
         targetSdk = 35
         versionCode = 1

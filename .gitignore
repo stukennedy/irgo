@@ -1,1 +1,14 @@
-irgo
+# CLI binary built at the repo root (anchored so it doesn't shadow
+# cmd/irgo/... or Kotlin package dirs named "irgo")
+/irgo
+
+# Android example build outputs
+android/Example/build/
+android/Example/.gradle/
+android/Example/app/build/
+# Contains the machine-local Android SDK path (auto-written by `irgo run android`)
+android/Example/local.properties
+
+# Mobile build artefacts
+build/ios/
+build/android/

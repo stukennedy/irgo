@@ -20,41 +20,32 @@ open class IrgoActivity : AppCompatActivity() {
             // Store original fetch
             const originalFetch = window.fetch;
 
-            // Override fetch to use irgo:// scheme
+            // Rewrite all fetch() URLs to http://localhost so Android WebView's
+            // Fetch API doesn't reject them as "unsupported scheme". The actual
+            // requests are intercepted in IrgoWebViewClient.shouldInterceptRequest
+            // and routed to Go without ever touching the network.
             window.fetch = function(input, init) {
                 let url = input;
                 if (typeof input === 'object' && input.url) {
                     url = input.url;
                 }
 
-                // Convert relative URLs to irgo:// scheme
+                // Convert relative URLs to http://localhost/
                 if (typeof url === 'string') {
                     if (url.startsWith('/')) {
-                        url = 'irgo://app' + url;
+                        url = 'http://localhost' + url;
                     } else if (!url.includes('://')) {
-                        url = 'irgo://app/' + url;
+                        url = 'http://localhost/' + url;
                     }
                 }
 
-                // For external URLs, use original fetch
-                if (!url.startsWith('irgo://')) {
+                // For external (https://...) URLs, pass through unchanged.
+                if (typeof url === 'string' && !url.startsWith('http://localhost')) {
                     return originalFetch(input, init);
                 }
 
                 return originalFetch(url, init);
             };
-
-            // Configure HTMX to use irgo:// scheme
-            if (typeof htmx !== 'undefined') {
-                document.body.addEventListener('htmx:configRequest', function(evt) {
-                    let path = evt.detail.path;
-                    if (path.startsWith('/')) {
-                        evt.detail.path = 'irgo://app' + path;
-                    } else if (!path.includes('://')) {
-                        evt.detail.path = 'irgo://app/' + path;
-                    }
-                });
-            }
 
             console.log('Irgo bridge initialized');
         })();
@@ -103,9 +94,6 @@ open class IrgoActivity : AppCompatActivity() {
                 // Cache settings
                 cacheMode = WebSettings.LOAD_DEFAULT
             }
-
-            // Add JavaScript interface for WebSocket bridge
-            addJavascriptInterface(IrgoWebSocketInterface(this@IrgoActivity), "IrgoNative")
         }
     }
 
@@ -119,7 +107,7 @@ open class IrgoActivity : AppCompatActivity() {
         )
 
         webView.loadDataWithBaseURL(
-            "irgo://app/",
+            "http://localhost/",
             fullHtml,
             "text/html",
             "UTF-8",
@@ -132,11 +120,11 @@ open class IrgoActivity : AppCompatActivity() {
      */
     fun navigate(path: String) {
         var url = path
-        if (!url.startsWith("irgo://")) {
+        if (!url.startsWith("http://localhost")) {
             url = if (url.startsWith("/")) {
-                "irgo://app$url"
+                "http://localhost$url"
             } else {
-                "irgo://app/$url"
+                "http://localhost/$url"
             }
         }
         webView.loadUrl(url)

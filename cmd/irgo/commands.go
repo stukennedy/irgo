@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -129,7 +130,15 @@ func buildAndroid(modulePath string) error {
 	}
 
 	mobilePackage := modulePath + "/mobile"
-	if err := runGomobileCommand("bind", "-target", "android", "-o", outPath, mobilePackage); err != nil {
+	// -androidapi 24 matches the minSdk used by the Android Example project
+	// (android/Example/app/build.gradle.kts). Modern NDKs reject API versions
+	// below 21; gomobile's default of 16 is too old.
+	//
+	// -javapkg irgo renames the Java package from the Go package's name
+	// ("mobile") to "irgo.mobile" so the Kotlin bridge in IrgoBridge.kt can
+	// `import irgo.mobile.Mobile`.
+	if err := runGomobileCommand("bind", "-target", "android", "-androidapi", "24",
+		"-javapkg", "irgo", "-o", outPath, mobilePackage); err != nil {
 		return fmt.Errorf("gomobile bind failed: %w", err)
 	}
 
@@ -428,11 +437,7 @@ func runAndroid() error {
 	// Check if android/Example project exists
 	androidProjectPath := "android/Example"
 	if _, err := os.Stat(androidProjectPath); os.IsNotExist(err) {
-		return fmt.Errorf("Android project not found at %s\n\nTo set up Android development:\n"+
-			"  1. Create an Android Studio project at android/Example/\n"+
-			"  2. Copy build/android/irgo.aar to app/libs/\n"+
-			"  3. Add implementation files('libs/irgo.aar') to build.gradle\n"+
-			"  4. Copy android/app/src/main/kotlin/com/irgo/*.kt to your project", androidProjectPath)
+		return fmt.Errorf("Android project not found at %s\n\nIf this directory is missing, your scaffold may have been generated with an older irgo version. Re-run `irgo new <name>` in a temp dir and copy the android/ folder over, or grab the canonical example from github.com/stukennedy/irgo/android/Example.", androidProjectPath)
 	}
 
 	// Build with Gradle
@@ -441,8 +446,21 @@ func runAndroid() error {
 		return fmt.Errorf("gradlew not found in %s", androidProjectPath)
 	}
 
+	// Gradle needs to know where the Android SDK is. If the user hasn't set
+	// ANDROID_HOME / ANDROID_SDK_ROOT in their shell, write a local.properties
+	// for them. local.properties is the canonical Android way to point a
+	// project at the SDK and is always gitignored, so it doesn't pollute the
+	// repo. Gradle reads sdk.dir from it before falling back to env vars.
+	if err := ensureAndroidSDKConfigured(androidProjectPath); err != nil {
+		return err
+	}
+
 	fmt.Println("Building Android app...")
-	cmd := exec.Command(gradlew, "assembleDebug")
+	// Use "./gradlew" so os/exec resolves the path relative to cmd.Dir.
+	// Passing the full "android/Example/gradlew" path here would make Go
+	// look for "android/Example/android/Example/gradlew" because relative
+	// Path values in exec.Cmd are joined onto Dir before lookup.
+	cmd := exec.Command("./gradlew", "assembleDebug")
 	cmd.Dir = androidProjectPath
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -462,9 +480,15 @@ func runAndroid() error {
 		return fmt.Errorf("failed to install APK (is an emulator running?): %w", err)
 	}
 
-	// Launch app
+	// Launch app. Read the applicationId from the project rather than
+	// hardcoding it — the scaffold templates the namespace per-project
+	// (com.irgo.<ident>) so a fixed value would only work for the framework's
+	// own Example.
 	fmt.Println("Launching app...")
-	packageName := "com.irgo.example"
+	packageName, err := readApplicationID(androidProjectPath)
+	if err != nil {
+		return fmt.Errorf("could not determine package name: %w", err)
+	}
 	activityName := ".MainActivity"
 	if err := runCommand("adb", "shell", "am", "start", "-n", packageName+"/"+packageName+activityName); err != nil {
 		return fmt.Errorf("failed to launch app: %w", err)
@@ -475,6 +499,111 @@ func runAndroid() error {
 }
 
 // Helper functions
+
+// readApplicationID parses applicationId from app/build.gradle.kts.
+// This is the most reliable source of truth before the APK is built; aapt
+// would also work but isn't always on PATH.
+func readApplicationID(androidProjectPath string) (string, error) {
+	gradlePath := filepath.Join(androidProjectPath, "app", "build.gradle.kts")
+	data, err := os.ReadFile(gradlePath)
+	if err != nil {
+		return "", err
+	}
+	// Matches:  applicationId = "com.foo.bar"
+	re := regexp.MustCompile(`applicationId\s*=\s*"([^"]+)"`)
+	m := re.FindStringSubmatch(string(data))
+	if len(m) < 2 {
+		return "", fmt.Errorf("no applicationId found in %s", gradlePath)
+	}
+	return m[1], nil
+}
+
+// findAndroidSDK locates the Android SDK by checking the standard env vars
+// then falling back to well-known install paths. Returns an empty string if
+// no SDK can be found.
+func findAndroidSDK() string {
+	// Env vars take precedence — if the user set them, trust them.
+	for _, env := range []string{"ANDROID_HOME", "ANDROID_SDK_ROOT"} {
+		if v := os.Getenv(env); v != "" {
+			if isAndroidSDK(v) {
+				return v
+			}
+		}
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+
+	// Well-known install locations, in order of preference per platform.
+	// Android Studio defaults differ by OS.
+	candidates := []string{
+		filepath.Join(home, "Android", "Sdk"),                     // Linux + Android Studio
+		filepath.Join(home, "Library", "Android", "sdk"),          // macOS + Android Studio
+		filepath.Join(home, "AppData", "Local", "Android", "Sdk"), // Windows
+		filepath.Join(home, "android-sdk"),                        // older manual installs
+		"/opt/android-sdk",                                        // system-wide on Linux
+		"/usr/local/share/android-sdk",                            // Homebrew on macOS
+	}
+	for _, c := range candidates {
+		if isAndroidSDK(c) {
+			return c
+		}
+	}
+	return ""
+}
+
+// isAndroidSDK returns true if dir looks like an Android SDK root. We check
+// for platform-tools and either platforms or build-tools — the bare minimum
+// for Gradle to build a debug APK.
+func isAndroidSDK(dir string) bool {
+	if _, err := os.Stat(filepath.Join(dir, "platform-tools")); err != nil {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(dir, "platforms")); err == nil {
+		return true
+	}
+	if _, err := os.Stat(filepath.Join(dir, "build-tools")); err == nil {
+		return true
+	}
+	return false
+}
+
+// ensureAndroidSDKConfigured writes a local.properties pointing at the
+// detected Android SDK, unless the project already has one. Returns a
+// helpful error if no SDK can be located.
+func ensureAndroidSDKConfigured(androidProjectPath string) error {
+	localPropsPath := filepath.Join(androidProjectPath, "local.properties")
+	if data, err := os.ReadFile(localPropsPath); err == nil {
+		if strings.Contains(string(data), "sdk.dir=") {
+			return nil // Already configured — respect the user's choice.
+		}
+	}
+
+	sdkPath := findAndroidSDK()
+	if sdkPath == "" {
+		return fmt.Errorf(`Android SDK not found.
+
+Tried:
+  $ANDROID_HOME and $ANDROID_SDK_ROOT (both empty or invalid)
+  ~/Android/Sdk, ~/Library/Android/sdk, ~/AppData/Local/Android/Sdk
+  /opt/android-sdk, /usr/local/share/android-sdk
+
+Install the Android SDK (via Android Studio or the command-line tools), then:
+  - Set ANDROID_HOME in your shell, OR
+  - Add 'sdk.dir=/path/to/sdk' to %s`, localPropsPath)
+	}
+
+	// Gradle on Windows wants forward slashes in local.properties to avoid
+	// escape-character ambiguity. filepath.ToSlash handles all platforms.
+	content := fmt.Sprintf("# Auto-generated by `irgo run android`. Safe to edit.\nsdk.dir=%s\n", filepath.ToSlash(sdkPath))
+	if err := os.WriteFile(localPropsPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", localPropsPath, err)
+	}
+	fmt.Printf("Configured Android SDK: %s\n", sdkPath)
+	return nil
+}
 
 func checkTool(name, installCmd string) error {
 	_, err := exec.LookPath(name)
