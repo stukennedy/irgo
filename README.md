@@ -71,7 +71,8 @@ A hypermedia-driven application framework that uses Go as a runtime kernel with 
 **For mobile development:**
 - [gomobile](https://pkg.go.dev/golang.org/x/mobile/cmd/gomobile): `go install golang.org/x/mobile/cmd/gomobile@latest && gomobile init`
 - [entr](https://github.com/eradman/entr): `brew install entr` (macOS)
-- For iOS: Xcode with iOS Simulator
+- For iOS on macOS: Xcode with iOS Simulator
+- For iOS on Linux: [xtool](https://xtool.sh) + Swift toolchain (run `xtool setup` to install the Darwin SDK), and a USB/network-connected iOS device
 - For Android: Android Studio with SDK and emulator
 
 **For desktop development:**
@@ -122,6 +123,14 @@ irgo dev                 # Start dev server at http://localhost:8080
 irgo run ios --dev       # Hot-reload with iOS Simulator
 irgo run ios             # Production build
 ```
+
+On Linux, `irgo run ios` deploys to a USB/network-connected physical device
+using [xtool](https://xtool.sh) instead of Xcode + Simulator. Install xtool
+and a Swift 6.1+ toolchain, run `xtool setup` once (requires Xcode.xip), and
+connect a device. In `--dev` mode the device connects to the dev server over
+your LAN (override the URL with `IRGO_DEV_SERVER=http://<host>:8080`). If
+your Darwin SDK lives outside `~/.swiftpm/swift-sdks`, point `IRGO_DARWIN_SDK`
+at it.
 
 ### Build for Production
 

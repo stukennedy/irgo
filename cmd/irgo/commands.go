@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -88,6 +89,12 @@ func runBuild(target string) error {
 }
 
 func buildIOS(modulePath string) error {
+	// On non-macOS hosts there is no Xcode; cross-compile with the xtool
+	// Darwin SDK instead (see apple_linux.go).
+	if runtime.GOOS != "darwin" {
+		return buildIOSXtool(modulePath)
+	}
+
 	fmt.Println("Building iOS framework...")
 
 	outPath := "build/ios/Irgo.xcframework"
@@ -205,8 +212,14 @@ func installTools() error {
 
 	fmt.Println()
 	fmt.Println("Tools installed! You may also want to install:")
-	fmt.Println("  - entr: brew install entr (for file watching)")
-	fmt.Println("  - Xcode: from App Store (for iOS development)")
+	if runtime.GOOS == "darwin" {
+		fmt.Println("  - entr: brew install entr (for file watching)")
+		fmt.Println("  - Xcode: from App Store (for iOS development)")
+	} else {
+		fmt.Println("  - entr: from your package manager (for file watching)")
+		fmt.Println("  - xtool + Swift toolchain: https://xtool.sh (for iOS development on Linux)")
+		fmt.Println("    then run 'xtool setup' to install the Darwin SDK")
+	}
 	fmt.Println("  - Android Studio: https://developer.android.com/studio (for Android development)")
 
 	return nil
@@ -225,6 +238,12 @@ func runMobile(platform string, devMode bool) error {
 }
 
 func runIOS(devMode bool) error {
+	// On non-macOS hosts, deploy to a physical device with xtool
+	// (https://xtool.sh) instead of Xcode + Simulator.
+	if runtime.GOOS != "darwin" {
+		return runIOSXtool(devMode)
+	}
+
 	// Check for Xcode
 	if err := checkTool("xcodebuild", "Install Xcode from the App Store"); err != nil {
 		return err

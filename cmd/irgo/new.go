@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-//go:embed templates/*
+//go:embed all:templates
 var templateFS embed.FS
 
 // Datastar files to download during project creation
@@ -155,6 +155,31 @@ func getIrgoPath() string {
 	return ""
 }
 
+// sanitizeIdentifier converts a project name into a string usable as an
+// identifier fragment (e.g. in a bundle ID). Apple's provisioning API
+// rejects underscores (and most punctuation) in App ID names, so anything
+// that is not a letter or digit is stripped, and a leading digit gets an
+// "app" prefix.
+func sanitizeIdentifier(name string) string {
+	if name == "" {
+		return "app"
+	}
+	var b strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	result := b.String()
+	if len(result) > 0 && result[0] >= '0' && result[0] <= '9' {
+		result = "app" + result
+	}
+	if result == "" {
+		return "app"
+	}
+	return result
+}
+
 // isRemoteModulePath checks if a path looks like a remote Go module path
 func isRemoteModulePath(path string) bool {
 	remotePrefixes := []string{
@@ -271,6 +296,7 @@ func newProject(name string) error {
 		// Replace placeholders
 		contentStr := string(content)
 		contentStr = strings.ReplaceAll(contentStr, "{{PROJECT_NAME}}", projectName)
+		contentStr = strings.ReplaceAll(contentStr, "{{PROJECT_IDENT}}", sanitizeIdentifier(projectName))
 		contentStr = strings.ReplaceAll(contentStr, "{{MODULE_PATH}}", modulePath)
 		contentStr = strings.ReplaceAll(contentStr, "{{GO_VERSION}}", getGoVersion())
 

@@ -48,6 +48,23 @@ open class IrgoWebViewController: UIViewController {
         """
     }
 
+    /// JavaScript that locks the viewport so pages can't be pinch- or
+    /// double-tap zoomed — keeps the WebView feeling like a native app even
+    /// if a page forgets (or overrides) the viewport meta tag.
+    private var viewportLockScript: String {
+        return """
+        (function() {
+            var meta = document.querySelector('meta[name=viewport]');
+            if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = 'viewport';
+                (document.head || document.documentElement).appendChild(meta);
+            }
+            meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+        })();
+        """
+    }
+
     open override func viewDidLoad() {
         super.viewDidLoad()
         setupWebView()
@@ -70,6 +87,15 @@ open class IrgoWebViewController: UIViewController {
         )
         config.userContentController.addUserScript(userScript)
 
+        // Lock the viewport on every page so the app can't be pinch- or
+        // double-tap zoomed.
+        let viewportScript = WKUserScript(
+            source: viewportLockScript,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        )
+        config.userContentController.addUserScript(viewportScript)
+
         // Configure preferences
         config.preferences.javaScriptEnabled = true
 
@@ -86,6 +112,12 @@ open class IrgoWebViewController: UIViewController {
         // Configure for mobile
         webView.scrollView.bounces = true
         webView.allowsBackForwardNavigationGestures = true
+
+        // Native-app feel: no long-press link previews, no zooming.
+        webView.allowsLinkPreview = false
+        webView.scrollView.bouncesZoom = false
+        webView.scrollView.minimumZoomScale = 1.0
+        webView.scrollView.maximumZoomScale = 1.0
 
         // Add to view
         view.addSubview(webView)

@@ -163,7 +163,8 @@ Usage:
   irgo build all             Build all mobile platforms
 
 Requirements:
-  - iOS: Xcode and gomobile
+  - iOS (macOS host): Xcode and gomobile
+  - iOS (Linux host): xtool + Swift toolchain (https://xtool.sh) and gomobile
   - Android: Android SDK and gomobile
   - Desktop: CGO enabled (C compiler required)
     - macOS: Xcode Command Line Tools
@@ -172,6 +173,7 @@ Requirements:
 
 Output:
   - iOS: build/ios/Irgo.xcframework
+    (on Linux, also copied to ios/App/Irgo.xcframework for xtool)
   - Android: build/android/irgo.aar
   - Desktop macOS: build/desktop/macos/<app>.app
   - Desktop Windows: build/desktop/windows/<app>.exe
@@ -189,7 +191,8 @@ Runs 'templ generate' to compile .templ files to Go code.`)
 		fmt.Println(`irgo run - Build and run on simulator or desktop
 
 Usage:
-  irgo run ios              Build and run on iOS Simulator
+  irgo run ios              Build and run on iOS Simulator (macOS)
+                            or a USB-connected device via xtool (Linux)
   irgo run ios --dev        Run iOS with hot-reload (connects to dev server)
   irgo run android          Build and run on Android Emulator
   irgo run desktop          Run as desktop app
@@ -197,11 +200,13 @@ Usage:
 
 Flags:
   --dev, -d    Development mode.
-               - Mobile: Connects to localhost:8080 for hot-reload
+               - Mobile: Connects to the dev server for hot-reload
                - Desktop: Enables browser devtools in webview
 
 Requirements:
-  - iOS: Xcode with iOS Simulator
+  - iOS (macOS host): Xcode with iOS Simulator
+  - iOS (Linux host): xtool + Swift toolchain (https://xtool.sh),
+    'xtool setup' completed, and a USB/network-connected iOS device
   - Android: Android Studio with emulator
   - Desktop: CGO enabled (see 'irgo help build' for details)
 
@@ -212,9 +217,10 @@ Mobile standard mode (without --dev):
 
 Mobile dev mode (with --dev):
   1. Starts the dev server (hot-reload)
-  2. Builds iOS app without gomobile framework
-  3. Launches simulator connected to localhost:8080
+  2. Builds the native app pointed at the dev server
+  3. Launches it on the simulator (macOS) or device (Linux)
   4. Code changes instantly reflect in the app
+     (on Linux the device must be on the same network as this machine)
 
 Desktop mode:
   1. Starts local HTTP server on auto-selected port

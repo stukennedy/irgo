@@ -3,6 +3,12 @@ bin/
 build/
 tmp/
 
+# iOS build outputs (only relevant when building for ios/)
+ios/App/.build/
+ios/App/xtool/
+ios/App/Irgo.xcframework/
+ios/App/.swiftpm/
+
 # Dependencies
 node_modules/
 vendor/
