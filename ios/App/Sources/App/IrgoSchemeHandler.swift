@@ -7,12 +7,22 @@ public class IrgoSchemeHandler: NSObject, WKURLSchemeHandler {
     /// The URL scheme to intercept (e.g., "irgo")
     public static let scheme = "irgo"
 
+    /// Tasks that are still alive, keyed by identity. WebKit calls stop(_:)
+    /// when a request is cancelled (e.g. Datastar aborts an in-flight fetch
+    /// because the user triggered the same action again). Calling
+    /// didReceive/didFinish on a stopped task raises an Objective-C
+    /// exception and crashes the app, so every completion is guarded.
+    /// Accessed on the main thread only (WebKit delivers start/stop there).
+    private var activeTasks = Set<ObjectIdentifier>()
+
     /// Start handling a request
     public func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         guard let url = urlSchemeTask.request.url else {
             urlSchemeTask.didFailWithError(IrgoError.invalidURL)
             return
         }
+
+        activeTasks.insert(ObjectIdentifier(urlSchemeTask))
 
         // Convert irgo:// URL to path
         // irgo://app/path?query -> /path?query
@@ -46,7 +56,6 @@ public class IrgoSchemeHandler: NSObject, WKURLSchemeHandler {
             )
 
             // Create URL response
-            let mimeType = response.headers["Content-Type"] ?? "text/html"
             let urlResponse = HTTPURLResponse(
                 url: url,
                 statusCode: response.status,
@@ -54,7 +63,16 @@ public class IrgoSchemeHandler: NSObject, WKURLSchemeHandler {
                 headerFields: response.headers
             )
 
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+
+                // The task may have been cancelled while Go was handling the
+                // request - touching it now would crash with
+                // NSInternalInconsistencyException.
+                let id = ObjectIdentifier(urlSchemeTask)
+                guard self.activeTasks.contains(id) else { return }
+                self.activeTasks.remove(id)
+
                 if let urlResponse = urlResponse {
                     urlSchemeTask.didReceive(urlResponse)
                     urlSchemeTask.didReceive(response.body)
@@ -68,7 +86,8 @@ public class IrgoSchemeHandler: NSObject, WKURLSchemeHandler {
 
     /// Stop handling a request (cancellation)
     public func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
-        // Request was cancelled, nothing to clean up
+        // Mark the task dead so the in-flight completion above is dropped.
+        activeTasks.remove(ObjectIdentifier(urlSchemeTask))
     }
 }
 
