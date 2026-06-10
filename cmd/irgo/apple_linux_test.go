@@ -88,6 +88,24 @@ func TestWriteAppleShims(t *testing.T) {
 	}
 }
 
+func TestSanitizeBundleIdent(t *testing.T) {
+	cases := map[string]string{
+		"myapp":           "myapp",
+		"my-app":          "myapp",
+		"my_app":          "myapp",
+		"My App":          "MyApp",
+		"123game":         "app123game",
+		"":                "app",
+		"---":             "app",
+		"irgo-xtool-test": "irgoxtooltest",
+	}
+	for in, want := range cases {
+		if got := sanitizeBundleIdent(in); got != want {
+			t.Errorf("sanitizeBundleIdent(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestReadXtoolBundleID(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "xtool.yml")

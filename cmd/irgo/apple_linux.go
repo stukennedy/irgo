@@ -31,8 +31,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 )
+
+// isDarwinHost reports whether the CLI is running on macOS. Used to decide
+// between the Xcode toolchain (macOS) and the xtool toolchain (everything
+// else) for iOS builds.
+func isDarwinHost() bool {
+	return runtime.GOOS == "darwin"
+}
 
 // appleToolchain describes the cross-compilation toolchain assembled from
 // the xtool Darwin SDK and a Swift toolchain.
@@ -590,6 +598,33 @@ func xtoolBundleIDPrefix() string {
 	teamID := string(m[1])
 	identity := strings.ToUpper(strings.SplitN(teamID, "-", 2)[0])
 	return "XTL-" + identity + "."
+}
+
+// sanitizeBundleIdent converts a project name into a fragment safe for use
+// in an Apple bundle ID. Unlike sanitizeIdentifier (which targets Java/Kotlin
+// packages and preserves underscores), Apple's provisioning API rejects
+// underscores and most punctuation in App ID names, so anything that is not
+// a letter or digit is stripped, and a leading digit gets an "app" prefix.
+//
+// Examples: "my-app" -> "myapp", "my_app" -> "myapp", "123game" -> "app123game".
+func sanitizeBundleIdent(name string) string {
+	if name == "" {
+		return "app"
+	}
+	var b strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	result := b.String()
+	if len(result) > 0 && result[0] >= '0' && result[0] <= '9' {
+		result = "app" + result
+	}
+	if result == "" {
+		return "app"
+	}
+	return result
 }
 
 // lanIPv4 returns this machine's primary outbound IPv4 address, or "" if it

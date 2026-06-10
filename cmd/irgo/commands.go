@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -105,7 +104,7 @@ func runBuild(target string) error {
 func buildIOS(modulePath string) error {
 	// On non-macOS hosts there is no Xcode; cross-compile with the xtool
 	// Darwin SDK instead (see apple_linux.go).
-	if runtime.GOOS != "darwin" {
+	if !isDarwinHost() {
 		return buildIOSXtool(modulePath)
 	}
 
@@ -226,7 +225,7 @@ func installTools() error {
 
 	fmt.Println()
 	fmt.Println("Tools installed! You may also want to install:")
-	if runtime.GOOS == "darwin" {
+	if isDarwinHost() {
 		fmt.Println("  - entr: brew install entr (for file watching)")
 		fmt.Println("  - Xcode: from App Store (for iOS development)")
 	} else {
@@ -254,7 +253,7 @@ func runMobile(platform string, devMode bool) error {
 func runIOS(devMode bool) error {
 	// On non-macOS hosts, deploy to a physical device with xtool
 	// (https://xtool.sh) instead of Xcode + Simulator.
-	if runtime.GOOS != "darwin" {
+	if !isDarwinHost() {
 		return runIOSXtool(devMode)
 	}
 

@@ -2,5 +2,5 @@
 # Used by `irgo run ios` / `xtool dev` on Linux to build, sign, and
 # install this app on a physical iOS device.
 version: 1
-bundleID: com.irgo.{{PROJECT_IDENT}}
+bundleID: com.irgo.{{BUNDLE_IDENT}}
 infoPath: Info.plist

@@ -155,19 +155,24 @@ func getIrgoPath() string {
 	return ""
 }
 
-// sanitizeIdentifier converts a project name into a string usable as an
-// identifier fragment (e.g. in a bundle ID). Apple's provisioning API
-// rejects underscores (and most punctuation) in App ID names, so anything
-// that is not a letter or digit is stripped, and a leading digit gets an
-// "app" prefix.
+// sanitizeIdentifier converts a project name into a form usable as a Java/Kotlin
+// package fragment or Go package name. Specifically:
+//   - non-alphanumeric characters (other than _) are replaced with underscores
+//   - leading digits are prefixed with `app` (Java doesn't allow identifiers to
+//     start with a digit)
+//   - the empty string becomes "app"
+//
+// Examples: "my-app" -> "my_app", "123game" -> "app123game", "hi" -> "hi".
 func sanitizeIdentifier(name string) string {
 	if name == "" {
 		return "app"
 	}
 	var b strings.Builder
 	for _, r := range name {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
 			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
 		}
 	}
 	result := b.String()
@@ -299,6 +304,7 @@ func newProject(name string) error {
 		contentStr = strings.ReplaceAll(contentStr, "{{PROJECT_IDENT}}", sanitizeIdentifier(projectName))
 		contentStr = strings.ReplaceAll(contentStr, "{{MODULE_PATH}}", modulePath)
 		contentStr = strings.ReplaceAll(contentStr, "{{GO_VERSION}}", getGoVersion())
+		contentStr = strings.ReplaceAll(contentStr, "{{BUNDLE_IDENT}}", sanitizeBundleIdent(projectName))
 
 		// Add replace directive for local development if irgo isn't published
 		irgoPath := getIrgoPath()
@@ -366,11 +372,10 @@ func newProject(name string) error {
 	}
 
 	// Install JS deps and build Tailwind CSS so the project is runnable out
-	// of the box. This matters doubly for mobile builds: static assets are
-	// embedded into the Go framework at build time (static/embed.go), so a
-	// missing output.css gets baked into the app and it renders unstyled.
-	// We prefer bun (faster); fall back to npm. If neither is installed,
-	// print instructions and move on.
+	// of the box. We prefer bun (faster); fall back to npm. If neither is
+	// installed, print instructions and move on — the project still builds
+	// with a missing output.css, the page just renders unstyled until the
+	// user runs `bun install && bun run css`.
 	installedCSS := false
 	for _, tool := range []string{"bun", "npm"} {
 		if _, err := exec.LookPath(tool); err != nil {
