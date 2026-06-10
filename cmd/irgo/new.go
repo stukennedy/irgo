@@ -365,12 +365,48 @@ func newProject(name string) error {
 		}
 	}
 
+	// Install JS deps and build Tailwind CSS so the project is runnable out
+	// of the box. This matters doubly for mobile builds: static assets are
+	// embedded into the Go framework at build time (static/embed.go), so a
+	// missing output.css gets baked into the app and it renders unstyled.
+	// We prefer bun (faster); fall back to npm. If neither is installed,
+	// print instructions and move on.
+	installedCSS := false
+	for _, tool := range []string{"bun", "npm"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			continue
+		}
+		fmt.Printf("Installing JS dependencies with %s...\n", tool)
+		installCmd := exec.Command(tool, "install")
+		installCmd.Dir = projectDir
+		installCmd.Stdout = os.Stdout
+		installCmd.Stderr = os.Stderr
+		if err := installCmd.Run(); err != nil {
+			fmt.Printf("Warning: %s install failed: %v\n", tool, err)
+			break
+		}
+		fmt.Println("Building Tailwind CSS...")
+		cssCmd := exec.Command(tool, "run", "css")
+		cssCmd.Dir = projectDir
+		cssCmd.Stdout = os.Stdout
+		cssCmd.Stderr = os.Stderr
+		if err := cssCmd.Run(); err != nil {
+			fmt.Printf("Warning: tailwind build failed: %v\n", err)
+		} else {
+			installedCSS = true
+		}
+		break
+	}
+
 	fmt.Println()
 	fmt.Println("Project created successfully!")
 	fmt.Println()
 	fmt.Println("Next steps:")
 	fmt.Printf("  cd %s\n", projectDir)
-	fmt.Println("  bun install        # or: npm install")
+	if !installedCSS {
+		fmt.Println("  bun install        # or: npm install")
+		fmt.Println("  bun run css        # build Tailwind CSS")
+	}
 	fmt.Println("  irgo dev           # start development server")
 	fmt.Println()
 

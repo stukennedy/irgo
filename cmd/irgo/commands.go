@@ -55,6 +55,20 @@ func runServe() error {
 	return fmt.Errorf("no main.go found - are you in an irgo project?")
 }
 
+// warnIfCSSMissing alerts the user when Tailwind output hasn't been built.
+// Mobile builds embed static assets into the Go framework (static/embed.go),
+// so a missing output.css gets permanently baked into the app and every page
+// renders unstyled.
+func warnIfCSSMissing() {
+	if _, err := os.Stat("static/css/input.css"); err != nil {
+		return // project doesn't use the Tailwind setup
+	}
+	if _, err := os.Stat("static/css/output.css"); os.IsNotExist(err) {
+		fmt.Println("Warning: static/css/output.css not found — the app will render unstyled.")
+		fmt.Println("  Build it first with: bun install && bun run css   (or npm)")
+	}
+}
+
 // runBuild builds for mobile platforms
 func runBuild(target string) error {
 	// Check for gomobile
@@ -558,6 +572,8 @@ func copyFile(src, dst string) error {
 
 // ensureMobileBuildSetup ensures the go.work file and x/mobile are set up correctly
 func ensureMobileBuildSetup() error {
+	warnIfCSSMissing()
+
 	goVersion := getGoVersion()
 
 	// Check if go.work exists with x/mobile
