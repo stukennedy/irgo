@@ -82,3 +82,39 @@ public struct IrgoResponse {
         }
     }
 }
+
+/// Helpers for building JavaScript source passed to evaluateJavaScript.
+public enum IrgoJS {
+    /// Encode a Swift string as a double-quoted JavaScript string literal.
+    /// The output is also a valid JSON string literal, so it can be used both
+    /// for JS call arguments and for JSON payload strings.
+    public static func stringLiteral(_ value: String) -> String {
+        var out = "\""
+        for scalar in value.unicodeScalars {
+            switch scalar {
+            case "\"":
+                out += "\\\""
+            case "\\":
+                out += "\\\\"
+            case "\n":
+                out += "\\n"
+            case "\r":
+                out += "\\r"
+            case "\t":
+                out += "\\t"
+            case "\u{2028}":
+                out += "\\u2028"
+            case "\u{2029}":
+                out += "\\u2029"
+            default:
+                if scalar.value < 0x20 {
+                    out += String(format: "\\u%04x", scalar.value)
+                } else {
+                    out.append(Character(scalar))
+                }
+            }
+        }
+        out += "\""
+        return out
+    }
+}
