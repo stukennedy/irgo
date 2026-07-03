@@ -7,10 +7,38 @@ A hypermedia-driven application framework that uses Go as a runtime kernel with 
 - **Go-Powered Apps**: Write your backend logic in Go, compile to native mobile frameworks or desktop apps
 - **Datastar for Interactivity**: Use Datastar's hypermedia approach with SSE instead of complex JavaScript
 - **Cross-Platform**: Single codebase for iOS, Android, desktop (macOS, Windows, Linux), and web
-- **Virtual HTTP (Mobile)**: No network sockets - requests are intercepted and handled directly by Go
+- **Virtual HTTP (Mobile)**: No network sockets - requests are intercepted and handled directly by Go, with **true streaming SSE**
+- **Native Capabilities**: One API for haptics, share sheets, clipboard, secure storage, notifications and more — `native.Call(...)` from Go, `irgo.native(...)` from the WebView, with pluggable Swift/Kotlin plugins
+- **Sessions That Just Work**: Persistent cookie jar on mobile — standard `http.SetCookie` auth flows survive app restarts
 - **Native Webview (Desktop)**: Real HTTP server with native webview window
 - **Type-Safe Templates**: Use [templ](https://templ.guide) for compile-time checked HTML templates
 - **Hot Reload Development**: Edit Go/templ code and see changes instantly
+
+## Native Capabilities
+
+Call platform features from anywhere in your app — no per-platform code:
+
+```html
+<!-- From the WebView (Datastar expressions) -->
+<button data-on:click="irgo.native('haptics.impact', {style: 'light'})">Tap</button>
+<button data-on:click="irgo.native('share.text', {text: 'Check this out!'})">Share</button>
+```
+
+```go
+// From a Go handler
+import "github.com/stukennedy/irgo/pkg/native"
+
+native.Call(ctx.Context(), "notifications.show", native.Params{
+    "title": "Order placed", "body": "We'll notify you when it ships",
+})
+```
+
+Built-in plugins: `device.info`, `haptics.*`, `clipboard.*`, `share.text`,
+`browser.open`, `storage.*` (Keychain / SharedPreferences),
+`notifications.*`, `toast.show`. Add your own by implementing the
+`IrgoPlugin` protocol/interface in Swift or Kotlin and registering it with
+`IrgoNative` — it's instantly callable from Go and JS. Register Go
+fallbacks with `native.Register` so the same code runs on web and desktop.
 
 ## Architecture
 

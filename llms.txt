@@ -651,6 +651,81 @@ templ MobileButton(text string) {
 }
 ```
 
+### Native Capabilities
+
+Call platform features with one API on every platform. From JS (Datastar
+expressions can call it directly):
+
+```go
+templ ShareButton(text string) {
+    <button data-on:click={ fmt.Sprintf("irgo.native('share.text', {text: %q})", text) }>
+        Share
+    </button>
+}
+
+templ HapticButton() {
+    <button data-on:click="irgo.native('haptics.impact', {style: 'light'}); @post('/like')">
+        Like
+    </button>
+}
+```
+
+From Go handlers:
+
+```go
+import "github.com/stukennedy/irgo/pkg/native"
+
+r.DSPost("/order", func(ctx *router.Context) error {
+    // ... create order ...
+    native.Call(ctx.Context(), "notifications.show", native.Params{
+        "title": "Order placed",
+        "body":  "We'll notify you when it ships",
+    })
+    return ctx.SSE().PatchTempl(templates.OrderConfirmed())
+})
+```
+
+Built-ins: device.info, haptics.impact/notification/selection,
+clipboard.read/write, share.text, browser.open, storage.get/set/remove,
+notifications.requestPermission/show, toast.show (Android). Register Go
+fallbacks with native.Register(method, handler) so web/desktop work too.
+Unsupported methods return native.ErrNotSupported — degrade gracefully.
+
+### Sessions and Cookies
+
+Cookies work on mobile exactly like on a server (the bridge keeps a
+persistent cookie jar). Use standard http.SetCookie in handlers for
+session auth; call mobile.ClearCookies() for logout.
+
+### Layout Script Order
+
+Always load the bridge before Datastar (both are served by the framework —
+no files to copy):
+
+```html
+<script src="/_irgo/bridge.js"></script>
+<script src="/static/js/datastar.js"></script>
+```
+
+### Streaming / Real-Time on Mobile
+
+SSE streams progressively through the mobile bridge. Long-lived handlers
+must watch for disconnect:
+
+```go
+r.DSGet("/live", func(ctx *router.Context) error {
+    sse := ctx.SSE()
+    for {
+        select {
+        case <-sse.Context().Done():
+            return nil // WebView cancelled the request
+        case update := <-updates:
+            sse.PatchTempl(templates.LiveRow(update))
+        }
+    }
+})
+```
+
 ## Do's and Don'ts
 
 ### DO:

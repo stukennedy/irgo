@@ -264,7 +264,89 @@ import "github.com/stukennedy/irgo/mobile"
 
 mobile.Initialize()
 mobile.SetHandler(r.Handler())
+
+// Optional: react to app lifecycle (driven by the native shells)
+mobile.SetLifecycleHandler(myHandler) // OnBackground() / OnForeground()
 ```
+
+Mobile production features (wired automatically by the iOS/Android shells):
+
+- **Streaming SSE**: Datastar handlers stream progressively through the
+  bridge (`mobile.HandleRequestStream`). Long-lived SSE handlers work, and
+  `sse.IsClosed()`/`ctx.Done()` fire when the WebView cancels the request.
+- **Cookies/sessions**: the bridge keeps a cookie jar (WebViews don't manage
+  cookies for custom schemes). Native shells call `mobile.SetStateDir(dir)`
+  at startup so cookies persist across app restarts. `mobile.ClearCookies()`
+  implements logout.
+- **Lifecycle**: native shells call `mobile.OnBackground()`/`OnForeground()`.
+
+### `github.com/stukennedy/irgo/pkg/native` - Native Capabilities
+
+Call platform features (haptics, clipboard, share, secure storage, local
+notifications, ...) from Go handlers or from the WebView, with one API that
+works on iOS, Android, desktop, and web.
+
+```go
+import "github.com/stukennedy/irgo/pkg/native"
+
+// From a Go handler: haptic feedback on mobile
+result, err := native.Call(ctx.Context(), "haptics.impact", native.Params{"style": "medium"})
+if errors.Is(err, native.ErrNotSupported) {
+    // No plugin on this platform and no Go fallback - degrade gracefully
+}
+
+// Register a Go fallback so the same method works on web/desktop
+native.Register("clipboard.write", func(ctx context.Context, params json.RawMessage) (any, error) {
+    // desktop clipboard implementation
+    return nil, nil
+})
+```
+
+From JavaScript (the JS bridge exposes `irgo.native`, promise-based):
+
+```html
+<button data-on:click="irgo.native('haptics.impact', {style: 'light'})">Tap</button>
+<button data-on:click="irgo.native('share.text', {text: 'Hello!'})">Share</button>
+```
+
+Resolution order: native plugin (Swift/Kotlin) → Go handler registered with
+`native.Register` → `ErrNotSupported`. On web/desktop, JS calls go to
+`POST /_irgo/native` (mounted automatically by `router.New()`).
+
+Built-in plugins shipped with the iOS/Android shells:
+
+| Method | Params | Result |
+|--------|--------|--------|
+| `device.info` | — | `{platform, model, osVersion, appVersion, bundleId}` |
+| `haptics.impact` | `{style: "light"\|"medium"\|"heavy"}` | — |
+| `haptics.notification` | `{type: "success"\|"warning"\|"error"}` | — |
+| `haptics.selection` | — | — |
+| `clipboard.write` / `clipboard.read` | `{text}` / — | — / `{text}` |
+| `share.text` | `{text, title?}` | — |
+| `browser.open` | `{url}` | — |
+| `storage.get/set/remove` | `{key, value?}` | `{value}` for get |
+| `notifications.requestPermission` | — | `{granted}` |
+| `notifications.show` | `{title, body, id?}` | — |
+| `toast.show` (Android) | `{text}` | — |
+
+Custom native features: implement `IrgoPlugin` (Swift) / `IrgoPlugin`
+(Kotlin) with a `namespace` and register it with `IrgoNative`; it becomes
+callable from Go and JS immediately.
+
+### The JS Bridge (`/_irgo/bridge.js`)
+
+`router.New()` automatically serves the embedded JS bridge at
+`GET /_irgo/bridge.js` and the native fallback at `POST /_irgo/native`.
+Layouts must load the bridge **before** Datastar:
+
+```html
+<script src="/_irgo/bridge.js"></script>
+<script src="/static/js/datastar.js"></script>
+```
+
+The bridge provides virtual HTTP (with streaming SSE), virtual WebSocket,
+and `irgo.native()` on mobile; on web/desktop it passes through to the real
+network.
 
 ## Templ Templates
 
@@ -819,4 +901,18 @@ The irgo module includes:
 
 9. **The router is chi-based** but with a simplified API. Use `ctx.Param()`, `ctx.Query()`, `ctx.FormValue()`.
 
-10. **For real-time features**, Datastar uses built-in SSE streaming.
+10. **For real-time features**, Datastar uses built-in SSE streaming. SSE
+    streams progressively on all platforms, including mobile (the virtual
+    HTTP bridge delivers chunks per flush).
+
+11. **Load the JS bridge before Datastar** in layouts:
+    `<script src="/_irgo/bridge.js"></script>` (served automatically by
+    `router.New()` — no file to copy).
+
+12. **Native features** go through `native.Call` (Go) / `irgo.native()` (JS).
+    Never hardcode platform checks in handlers; register Go fallbacks with
+    `native.Register` for web/desktop.
+
+13. **Cookies work on mobile** via the bridge's cookie jar. Session-based
+    auth behaves like on a normal server; native shells persist the jar with
+    `mobile.SetStateDir`.
