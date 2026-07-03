@@ -1,10 +1,12 @@
 package com.irgo
 
 import android.annotation.SuppressLint
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.appcompat.app.AppCompatActivity
+import java.util.concurrent.Executors
 
 /**
  * Base activity for Irgo apps.
@@ -48,7 +50,11 @@ open class IrgoActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        devServerUrl = intent.getStringExtra(EXTRA_DEV_SERVER)
+        // Dev mode only exists in debuggable builds: the activity is
+        // exported, so honoring the extra in release builds would let any
+        // co-installed app point this WebView at arbitrary content.
+        val debuggable = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        devServerUrl = if (debuggable) intent.getStringExtra(EXTRA_DEV_SERVER) else null
 
         if (!isDevMode) {
             // Initialize Go bridge
@@ -144,19 +150,26 @@ open class IrgoActivity : AppCompatActivity() {
             return
         }
 
-        val html = IrgoBridge.renderInitialPage()
-
-        // The bridge script (irgo-bridge.js) is loaded by the page itself via
-        // layout.templ and served through shouldInterceptRequest. The base URL
-        // uses the irgo:// scheme so relative asset URLs resolve to the native
-        // bridge.
-        webView.loadDataWithBaseURL(
-            "irgo://app/",
-            html,
-            "text/html",
-            "UTF-8",
-            null
-        )
+        // Render off the main thread: the Go "/" handler may call
+        // native.Call, whose plugins run on the main thread — rendering
+        // synchronously here would deadlock until the native-call timeout.
+        Executors.newSingleThreadExecutor().execute {
+            val html = IrgoBridge.renderInitialPage()
+            runOnUiThread {
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                // The bridge script (irgo-bridge.js) is loaded by the page
+                // itself via layout.templ and served through
+                // shouldInterceptRequest. The base URL uses the irgo:// scheme
+                // so relative asset URLs resolve to the native bridge.
+                webView.loadDataWithBaseURL(
+                    "irgo://app/",
+                    html,
+                    "text/html",
+                    "UTF-8",
+                    null
+                )
+            }
+        }
     }
 
     /**

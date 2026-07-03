@@ -180,6 +180,40 @@ func TestHandleRequestStreamCancellation(t *testing.T) {
 	}
 }
 
+func TestHandleRequestStreamHandlerPanic(t *testing.T) {
+	// A panicking handler must complete the stream with an error — and must
+	// NOT re-raise: this often runs on a bare goroutine in the mobile
+	// bridge, where an escaped panic would kill the whole app process.
+	adapter := NewHTTPAdapter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("boom")
+	}))
+
+	stream := newRecordingStream()
+	adapter.HandleRequestStream(context.Background(), core.NewRequest("GET", "/"), stream)
+
+	if !stream.complete || stream.errMsg == "" {
+		t.Errorf("complete=%v errMsg=%q, want completed with error", stream.complete, stream.errMsg)
+	}
+	if stream.status != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", stream.status)
+	}
+}
+
+func TestHandleRequestStreamMalformedURL(t *testing.T) {
+	// Malformed URLs from the native side make httptest.NewRequest panic;
+	// that must surface as a completed error stream, not a process crash.
+	adapter := NewHTTPAdapter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+
+	stream := newRecordingStream()
+	adapter.HandleRequestStream(context.Background(), core.NewRequest("GET", "/a%zz"), stream)
+
+	if !stream.complete || stream.errMsg == "" {
+		t.Errorf("complete=%v errMsg=%q, want completed with error", stream.complete, stream.errMsg)
+	}
+}
+
 func TestHandleRequestStreamMultiValueHeaders(t *testing.T) {
 	adapter := NewHTTPAdapter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{Name: "a", Value: "1"})

@@ -46,16 +46,27 @@ func (j *cookieJar) setFromResponse(headers http.Header) {
 		return
 	}
 
+	// Only rewrite the on-disk jar when a *persistent* cookie actually
+	// changed — apps with rolling-session middleware emit Set-Cookie on
+	// every response, and per-response disk writes on the request hot path
+	// would add latency and battery drain for nothing.
+	persistentChanged := false
+
 	j.mu.Lock()
 	for _, c := range setCookies {
 		path := c.Path
 		if path == "" {
 			path = "/"
 		}
+		key := cookieKey(c.Name, path)
+		old := j.cookies[key]
 
 		// MaxAge < 0 or an Expires in the past deletes the cookie.
 		if c.MaxAge < 0 || (!c.Expires.IsZero() && c.Expires.Before(time.Now())) {
-			delete(j.cookies, cookieKey(c.Name, path))
+			delete(j.cookies, key)
+			if old != nil && !old.Expires.IsZero() {
+				persistentChanged = true
+			}
 			continue
 		}
 
@@ -65,11 +76,21 @@ func (j *cookieJar) setFromResponse(headers http.Header) {
 		} else if !c.Expires.IsZero() {
 			sc.Expires = c.Expires
 		}
-		j.cookies[cookieKey(c.Name, path)] = sc
+		j.cookies[key] = sc
+
+		// Value-based change detection only: rolling-session middleware
+		// refreshes Max-Age (and therefore Expires) on every response, and
+		// the lifecycle saves (OnBackground/Shutdown) capture the freshest
+		// deadlines anyway.
+		if !sc.Expires.IsZero() && (old == nil || old.Value != sc.Value || old.Expires.IsZero()) {
+			persistentChanged = true
+		}
 	}
 	j.mu.Unlock()
 
-	j.save()
+	if persistentChanged {
+		j.save()
+	}
 }
 
 // cookieHeader returns the Cookie header value for a request path,

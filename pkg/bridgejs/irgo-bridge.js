@@ -65,26 +65,14 @@
   // ========================================
 
   const NativeBridge = {
-    // HTTP request handler
+    // Buffered HTTP request (Android legacy path only). On iOS all HTTP goes
+    // through the irgo:// WKURLSchemeHandler, which streams natively — there
+    // is no postMessage HTTP path, so reject instead of hanging a promise.
     async httpRequest(method, url, headers, body) {
-      if (isIOS) {
-        return new Promise((resolve, reject) => {
-          const requestId = generateUUID();
-          pendingHttpRequests.set(requestId, { resolve, reject });
-
-          window.webkit.messageHandlers.irgo.postMessage({
-            type: "http",
-            requestId,
-            method,
-            url,
-            headers: JSON.stringify(headers),
-            body: body ? btoa(body) : null,
-          });
-        });
-      } else if (isAndroid) {
-        // Async callback pattern (mirrors iOS). The @JavascriptInterface
-        // method returns immediately; Go processes the request on a worker
-        // thread and calls back via window._irgo_http_response / _irgo_http_error.
+      if (isAndroid) {
+        // Async callback pattern: the @JavascriptInterface method returns
+        // immediately; Go processes the request on a worker thread and calls
+        // back via window._irgo_http_response / _irgo_http_error.
         return new Promise((resolve, reject) => {
           const requestId = generateUUID();
           pendingHttpRequests.set(requestId, { resolve, reject });
@@ -98,7 +86,9 @@
           );
         });
       }
-      throw new Error("Native bridge not available");
+      throw new Error(
+        "NativeBridge.httpRequest is Android-only; use fetch() (iOS routes it via the irgo:// scheme)",
+      );
     },
 
     // WebSocket connect
@@ -317,7 +307,8 @@
   // NATIVE CALLBACK HANDLERS
   // ========================================
 
-  // Called by native code when HTTP response is ready (iOS)
+  // Called by native code when a buffered HTTP response is ready
+  // (Android legacy path)
   window._irgo_http_response = function (requestId, status, headers, body) {
     const pending = pendingHttpRequests.get(requestId);
     if (pending) {
@@ -330,7 +321,7 @@
     }
   };
 
-  // Called by native code on HTTP error (iOS)
+  // Called by native code on a buffered HTTP error (Android legacy path)
   window._irgo_http_error = function (requestId, error) {
     const pending = pendingHttpRequests.get(requestId);
     if (pending) {
@@ -582,16 +573,17 @@
   // response, letting Datastar process SSE events while the handler is still
   // running - true streaming instead of one buffered blob at the end.
 
-  window._irgo_stream_response = function (requestId, status, headersJSON) {
-    const stream = pendingStreams.get(requestId);
-    if (!stream) return;
-
+  // Build a fetch Headers object from the bridge's headers wire format
+  // (values may be strings or arrays for multi-value headers).
+  function toFetchHeaders(headersObjOrJSON) {
     const responseHeaders = new Headers();
-    let parsed = {};
-    try {
-      parsed = headersJSON ? JSON.parse(headersJSON) : {};
-    } catch (e) {
-      parsed = {};
+    let parsed = headersObjOrJSON || {};
+    if (typeof parsed === "string") {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch (e) {
+        parsed = {};
+      }
     }
     for (const key in parsed) {
       if (!Object.prototype.hasOwnProperty.call(parsed, key)) continue;
@@ -606,10 +598,22 @@
         // Skip headers the Headers API forbids setting.
       }
     }
+    return responseHeaders;
+  }
+
+  // 204/205/304 must have a null body per the Fetch spec.
+  function isNullBodyStatus(status) {
+    return status === 204 || status === 205 || status === 304;
+  }
+
+  window._irgo_stream_response = function (requestId, status, headersJSON) {
+    const stream = pendingStreams.get(requestId);
+    if (!stream) return;
+
+    const responseHeaders = toFetchHeaders(headersJSON);
 
     const st = status || 200;
-    // 204/205/304 must have a null body per the Fetch spec.
-    const nullBody = st === 204 || st === 205 || st === 304;
+    const nullBody = isNullBodyStatus(st);
 
     let bodyStream = null;
     if (!nullBody) {
@@ -787,7 +791,10 @@
       return Promise.reject(new Error("irgo.native: method name required"));
     }
 
-    if (isIOS) {
+    // The __IRGO_IOS_NATIVE__ flag is injected by shells that implement the
+    // {type:"native"} message. Without the guard, an older shell would drop
+    // the message and the promise would hang forever.
+    if (isIOS && window.__IRGO_IOS_NATIVE__) {
       return new Promise(function (resolve, reject) {
         const requestId = generateUUID();
         pendingNativeCalls.set(requestId, { resolve, reject, method, params });
@@ -861,6 +868,14 @@
         return NativeFetch.call(window, input, init);
       }
 
+      // FormData needs multipart encoding with a boundary; Request does
+      // both (String(formData) would send the literal "[object FormData]").
+      if (typeof FormData !== "undefined" && body instanceof FormData) {
+        const encoded = new Request(rawUrl, { method: "POST", body });
+        headers["Content-Type"] = encoded.headers.get("content-type");
+        body = await encoded.text();
+      }
+
       const bodyString = await bodyToString(body);
 
       // Preferred: streaming path (progressive SSE).
@@ -868,33 +883,22 @@
         return nativeStreamingFetch(method, path, headers, bodyString, signal);
       }
 
-      // Legacy shells: buffered request/response.
+      // Legacy shells: buffered request/response. SSE cannot stream through
+      // this path — a long-lived handler's response only arrives when the
+      // handler returns, so warn loudly instead of hanging silently.
+      if ((headers["Accept"] || headers["accept"] || "").includes("text/event-stream")) {
+        console.warn(
+          "[irgo] This Android shell has no httpRequestStream - SSE responses " +
+            "will be buffered (long-lived handlers will hang). Update " +
+            "IrgoJSInterface.kt to the current irgo shell to enable streaming.",
+        );
+      }
       const res = await NativeBridge.httpRequest(method, path, headers, bodyString);
 
-      const responseHeaders = new Headers();
-      if (res.headers) {
-        for (const key in res.headers) {
-          if (Object.prototype.hasOwnProperty.call(res.headers, key)) {
-            try {
-              const value = res.headers[key];
-              if (Array.isArray(value)) {
-                for (const v of value) responseHeaders.append(key, v);
-              } else {
-                responseHeaders.set(key, value);
-              }
-            } catch (e) {
-              // Skip headers the Headers API forbids setting.
-            }
-          }
-        }
-      }
-
       const status = res.status || 200;
-      // 204/205/304 must have a null body per the Fetch spec.
-      const nullBody = status === 204 || status === 205 || status === 304;
-      return new Response(nullBody ? null : res.body, {
+      return new Response(isNullBodyStatus(status) ? null : res.body, {
         status,
-        headers: responseHeaders,
+        headers: toFetchHeaders(res.headers),
       });
     };
   }

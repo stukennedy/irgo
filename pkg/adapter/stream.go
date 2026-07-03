@@ -3,8 +3,9 @@ package adapter
 import (
 	"bytes"
 	"context"
+	"log"
 	"net/http"
-	"net/http/httptest"
+	"runtime/debug"
 	"sync"
 
 	"github.com/stukennedy/irgo/pkg/core"
@@ -39,33 +40,28 @@ type ResponseStream interface {
 // Cancelling ctx cancels the *http.Request context, so handlers that watch
 // r.Context().Done() (e.g. datastar's SSE.IsClosed) terminate when the
 // client goes away — exactly like a real network disconnect.
+//
+// Panics (from the handler or from request construction) are recovered and
+// reported as a completed 500 stream, mirroring net/http's behavior. This
+// often runs on a bare goroutine spawned by the mobile bridge, where a
+// re-raised panic would kill the whole app process.
 func (a *HTTPAdapter) HandleRequestStream(ctx context.Context, req *core.Request, stream ResponseStream) {
-	var body *bytes.Reader
-	if len(req.Body) > 0 {
-		body = bytes.NewReader(req.Body)
-	} else {
-		body = bytes.NewReader(nil)
-	}
-
-	httpReq := httptest.NewRequest(req.Method, req.URL, body)
-	httpReq = httpReq.WithContext(ctx)
-
-	for k, values := range req.HTTPHeaders() {
-		for _, v := range values {
-			httpReq.Header.Add(k, v)
-		}
-	}
-
 	w := &streamWriter{stream: stream, header: make(http.Header)}
 
 	// A panicking handler must still complete the stream, otherwise the
 	// native side waits forever.
 	defer func() {
 		if r := recover(); r != nil {
+			if r != http.ErrAbortHandler {
+				log.Printf("irgo/adapter: recovered handler panic: %v\n%s", r, debug.Stack())
+			}
 			w.completeWithPanic(r)
-			panic(r) // re-raise so it isn't silently swallowed
 		}
 	}()
+
+	// buildHTTPRequest panics on malformed method/URL from the native side;
+	// the deferred recover above turns that into a 500 stream too.
+	httpReq := buildHTTPRequest(req).WithContext(ctx)
 
 	a.handler.ServeHTTP(w, httpReq)
 	w.finish()

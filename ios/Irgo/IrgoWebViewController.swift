@@ -27,6 +27,9 @@ open class IrgoWebViewController: UIViewController {
         return """
         (function() {
             window.__IRGO_PLATFORM__ = 'ios';
+            // Tells /_irgo/bridge.js this shell implements the {type:"native"}
+            // message, so irgo.native() uses it instead of the HTTP fallback.
+            window.__IRGO_IOS_NATIVE__ = true;
 
             const originalFetch = window.fetch;
 
@@ -170,12 +173,18 @@ open class IrgoWebViewController: UIViewController {
 
     // MARK: - Navigation
 
-    /// Load the initial HTML page
+    /// Load the initial HTML page. Rendering runs off the main thread: the
+    /// Go "/" handler may call native.Call, whose plugins execute on the
+    /// main queue — rendering synchronously here would deadlock until the
+    /// 30s native-call timeout.
     private func loadInitialPage() {
-        let html = IrgoBridge.shared.renderInitialPage()
-
-        // Load with base URL using our custom scheme
-        webView.loadHTMLString(html, baseURL: URL(string: "irgo://app/"))
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let html = IrgoBridge.shared.renderInitialPage()
+            DispatchQueue.main.async {
+                // Load with base URL using our custom scheme
+                self?.webView.loadHTMLString(html, baseURL: URL(string: "irgo://app/"))
+            }
+        }
     }
 
     /// Navigate to a path within the app
@@ -254,6 +263,13 @@ final class IrgoScriptMessageHandler: NSObject, WKScriptMessageHandler {
 
     weak var webView: WKWebView?
 
+    /// Serial queue for Go bridge calls. WKScriptMessageHandler delivers on
+    /// the main thread, but Go WebSocket handlers (OnConnect/OnMessage) run
+    /// synchronously inside these calls and may invoke native.Call — whose
+    /// plugins execute on the main queue. Dispatching off-main keeps the
+    /// main queue free and makes that re-entrancy deadlock impossible.
+    private let bridgeQueue = DispatchQueue(label: "irgo.bridge.messages")
+
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == "irgo",
               let body = message.body as? [String: Any],
@@ -265,15 +281,19 @@ final class IrgoScriptMessageHandler: NSObject, WKScriptMessageHandler {
         case "native":
             handleNative(body)
         case "ws_connect":
-            handleWebSocketConnect(body)
+            bridgeQueue.async { self.handleWebSocketConnect(body) }
         case "ws_send":
             if let sessionID = body["sessionId"] as? String,
                let data = body["data"] as? String {
-                _ = try? IrgoWebSocketBridge.shared.send(sessionID: sessionID, data: data)
+                bridgeQueue.async {
+                    _ = try? IrgoWebSocketBridge.shared.send(sessionID: sessionID, data: data)
+                }
             }
         case "ws_close":
             if let sessionID = body["sessionId"] as? String {
-                IrgoWebSocketBridge.shared.close(sessionID: sessionID)
+                bridgeQueue.async {
+                    IrgoWebSocketBridge.shared.close(sessionID: sessionID)
+                }
             }
         default:
             break

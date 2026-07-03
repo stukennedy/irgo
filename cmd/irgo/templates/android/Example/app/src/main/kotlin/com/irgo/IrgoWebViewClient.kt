@@ -71,12 +71,28 @@ open class IrgoWebViewClient(devServerUrl: String? = null) : WebViewClient() {
         val headers = request.requestHeaders ?: emptyMap()
 
         // Handle request (this runs on WebView thread, which is fine for our use case)
-        val response = IrgoBridge.handleRequest(
+        var response = IrgoBridge.handleRequest(
             method = method,
             url = path,
             headers = headers,
             body = null // GET resource loads only; body-bearing requests go through IrgoJSInterface
         )
+
+        // Follow redirects here: WebResourceResponse throws
+        // IllegalArgumentException for 3xx status codes, so a Go handler
+        // returning ctx.Redirect() on a plain navigation would crash the app.
+        var hops = 0
+        while (response.status in 300..399 && hops < 5) {
+            val location = response.headers["Location"] ?: break
+            val target = if (location.startsWith("/")) location else "/$location"
+            response = IrgoBridge.handleRequest("GET", target, headers, null)
+            hops++
+        }
+
+        // WebResourceResponse rejects status < 100, 3xx, and empty reason
+        // phrases; degrade to a plain 500 rather than throwing on the
+        // Chromium thread.
+        val status = if (response.status in 300..399 || response.status < 100) 500 else response.status
 
         // Determine MIME type
         val mimeType = response.headers["Content-Type"] ?: "text/html"
@@ -85,8 +101,8 @@ open class IrgoWebViewClient(devServerUrl: String? = null) : WebViewClient() {
         return WebResourceResponse(
             mimeType.split(";").first().trim(),
             "UTF-8",
-            response.status,
-            if (response.status < 400) "OK" else "Error",
+            status,
+            if (status < 400) "OK" else "Error",
             response.headers,
             ByteArrayInputStream(response.body)
         )

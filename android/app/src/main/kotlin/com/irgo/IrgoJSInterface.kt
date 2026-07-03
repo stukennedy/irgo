@@ -58,18 +58,19 @@ class IrgoJSInterface(private val activity: IrgoActivity) {
     fun httpRequest(requestId: String, method: String, url: String, headersJSON: String, body: String) {
         executor.execute {
             try {
-                val headers = parseHeaders(headersJSON)
                 val bodyBytes = if (body.isEmpty()) null else body.toByteArray(Charsets.UTF_8)
 
-                val response = IrgoBridge.handleRequest(method, url, headers, bodyBytes)
+                // Pass the headers JSON straight through: Go's
+                // core.DecodeHeaders does the tolerant parsing, and a
+                // decode/re-encode here would collapse multi-value headers.
+                val response = Irgo.handleRequest(method, url, headersJSON, bodyBytes)
 
-                val responseHeaders = JSONObject(response.headers).toString()
-                val responseBody = Base64.encodeToString(response.body, Base64.NO_WRAP)
+                val responseBody = Base64.encodeToString(response?.body ?: ByteArray(0), Base64.NO_WRAP)
                 callJs(
                     "window._irgo_http_response",
                     jsString(requestId),
-                    response.status.toString(),
-                    jsString(responseHeaders),
+                    (response?.status ?: 500L).toString(),
+                    jsString(response?.headers ?: "{}"),
                     jsString(responseBody)
                 )
             } catch (e: Exception) {
@@ -315,21 +316,6 @@ class IrgoJSInterface(private val activity: IrgoActivity) {
     // ========================================
     // Helpers
     // ========================================
-
-    /** Parse a JSON headers object into a string map (best effort). */
-    private fun parseHeaders(headersJSON: String?): Map<String, String> {
-        if (headersJSON.isNullOrEmpty()) return emptyMap()
-        return try {
-            val obj = JSONObject(headersJSON)
-            val map = mutableMapOf<String, String>()
-            obj.keys().forEach { key ->
-                map[key] = obj.optString(key)
-            }
-            map
-        } catch (e: Exception) {
-            emptyMap()
-        }
-    }
 
     /**
      * Encode a Kotlin string as a JavaScript string literal. JSON escaping is

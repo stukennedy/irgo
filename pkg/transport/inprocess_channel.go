@@ -68,13 +68,16 @@ func (c *InProcessChannel) Receive() <-chan *Message {
 // Close gracefully closes the channel.
 func (c *InProcessChannel) Close() error {
 	c.closeOnce.Do(func() {
+		// Closing incoming under the write lock pairs with deliverMessage
+		// holding the read lock across its send — no send can race the
+		// close (send on a closed channel panics).
 		c.closeMu.Lock()
 		c.closed = true
+		close(c.done)
+		close(c.incoming)
 		c.closeMu.Unlock()
 
 		c.session.Close()
-		close(c.done)
-		close(c.incoming)
 	})
 	return nil
 }
@@ -127,13 +130,14 @@ func (c *InProcessChannel) Reply(requestID, html string) error {
 }
 
 // deliverMessage is called internally to deliver messages to the incoming channel.
+// The read lock is held across the send so Close cannot close the channel
+// mid-send.
 func (c *InProcessChannel) deliverMessage(msg *Message) bool {
 	c.closeMu.RLock()
+	defer c.closeMu.RUnlock()
 	if c.closed {
-		c.closeMu.RUnlock()
 		return false
 	}
-	c.closeMu.RUnlock()
 
 	select {
 	case c.incoming <- msg:

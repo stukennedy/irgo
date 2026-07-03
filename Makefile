@@ -1,4 +1,4 @@
-.PHONY: all build ios android js clean test lint install-tools install help
+.PHONY: all build ios android js clean test lint install-tools install help sync-templates check-templates
 
 # Go module
 MODULE := github.com/stukennedy/irgo
@@ -74,6 +74,38 @@ js:
 # Build all platforms
 mobile: ios android js
 	@echo "All platforms built successfully"
+
+# Sync the canonical native shells into the CLI scaffolding templates.
+# ios/Irgo and android/app are the single source of truth; run this after
+# editing them so `irgo new` scaffolds current code.
+# (IrgoWebViewController.swift is excluded: the template variant adds
+# dev-mode support and is maintained by hand.)
+ANDROID_SHELL_FILES = IrgoActivity IrgoBridge IrgoJSInterface IrgoNative IrgoPlugins IrgoWebViewClient
+IOS_SHELL_FILES = IrgoBridge IrgoSchemeHandler IrgoWebSocketBridge IrgoNative IrgoPlugins
+
+sync-templates:
+	@for f in $(ANDROID_SHELL_FILES); do \
+		cp android/app/src/main/kotlin/com/irgo/$$f.kt \
+		   cmd/irgo/templates/android/Example/app/src/main/kotlin/com/irgo/$$f.kt; \
+	done
+	@for f in $(IOS_SHELL_FILES); do \
+		cp ios/Irgo/$$f.swift \
+		   cmd/irgo/templates/ios/Example/Example/$$f.swift; \
+	done
+	@echo "Native shell templates synced"
+
+# Verify the templates match the canonical shells (usable in CI)
+check-templates:
+	@ok=1; \
+	for f in $(ANDROID_SHELL_FILES); do \
+		diff -q android/app/src/main/kotlin/com/irgo/$$f.kt \
+			cmd/irgo/templates/android/Example/app/src/main/kotlin/com/irgo/$$f.kt || ok=0; \
+	done; \
+	for f in $(IOS_SHELL_FILES); do \
+		diff -q ios/Irgo/$$f.swift \
+			cmd/irgo/templates/ios/Example/Example/$$f.swift || ok=0; \
+	done; \
+	if [ $$ok -eq 1 ]; then echo "Templates in sync"; else echo "Templates out of sync - run 'make sync-templates'"; exit 1; fi
 
 # Clean build artifacts
 clean:

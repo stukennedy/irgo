@@ -59,7 +59,10 @@ func HandleRequestStream(method, url, headers string, body []byte, callback Stre
 	if b == nil || b.adapter == nil {
 		go func() {
 			defer cancel()
-			callback.OnResponse(500, `{"Content-Type":"text/html; charset=utf-8"}`)
+			// Same error shape as the buffered path (core.ErrorResponse).
+			resp := core.ErrorResponse(500, "Bridge not initialized")
+			callback.OnResponse(resp.Status, resp.Headers)
+			callback.OnChunk(resp.Body)
 			callback.OnComplete("Bridge not initialized")
 		}()
 		return handle
@@ -75,7 +78,7 @@ func HandleRequestStream(method, url, headers string, body []byte, callback Stre
 
 	go func() {
 		defer cancel()
-		b.adapter.HandleRequestStream(ctx, req, &cookieAwareStream{callback: callback, jar: b.jar})
+		b.adapter.HandleRequestStream(ctx, req, &cookieAwareStream{callback: callback, bridge: b})
 	}()
 
 	return handle
@@ -85,15 +88,11 @@ func HandleRequestStream(method, url, headers string, body []byte, callback Stre
 // capturing Set-Cookie headers into the bridge's jar.
 type cookieAwareStream struct {
 	callback StreamCallback
-	jar      *cookieJar
+	bridge   *Bridge
 }
 
 func (s *cookieAwareStream) OnResponse(status int, headersJSON string) {
-	if s.jar != nil {
-		if h := core.DecodeHeaders(headersJSON); len(h) > 0 {
-			s.jar.setFromResponse(h)
-		}
-	}
+	s.bridge.captureCookies(headersJSON)
 	s.callback.OnResponse(status, headersJSON)
 }
 

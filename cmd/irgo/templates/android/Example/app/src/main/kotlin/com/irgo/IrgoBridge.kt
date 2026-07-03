@@ -2,6 +2,7 @@ package com.irgo
 
 import android.webkit.WebView
 import mobile.Mobile as Irgo
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -106,11 +107,23 @@ data class IrgoResponse(
 
     companion object {
         fun from(response: core.Response): IrgoResponse {
+            // Header values may be strings or arrays (multi-value headers
+            // such as Set-Cookie); arrays are joined with ", " for this flat
+            // map view. Naive getString would corrupt or drop array values.
             val headers = mutableMapOf<String, String>()
             try {
                 val headersJson = JSONObject(response.headers)
                 headersJson.keys().forEach { key ->
-                    headers[key] = headersJson.getString(key)
+                    when (val value = headersJson.get(key)) {
+                        is JSONArray -> {
+                            val parts = mutableListOf<String>()
+                            for (i in 0 until value.length()) {
+                                parts.add(value.optString(i))
+                            }
+                            headers[key] = parts.joinToString(", ")
+                        }
+                        else -> headers[key] = value.toString()
+                    }
                 }
             } catch (e: Exception) {
                 // Ignore JSON parsing errors

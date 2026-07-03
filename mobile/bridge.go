@@ -5,6 +5,7 @@ package mobile
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/stukennedy/irgo/pkg/adapter"
@@ -132,8 +133,21 @@ func HandleRequest(method, url, headers string, body []byte) *core.Response {
 	b.injectCookies(req)
 
 	resp := b.adapter.HandleRequest(req)
-	b.jar.setFromResponse(resp.HTTPHeaders())
+	b.captureCookies(resp.Headers)
 	return resp
+}
+
+// captureCookies stores Set-Cookie headers from a response into the jar.
+// The substring guard avoids a full JSON decode of the header set on the
+// hot path — the vast majority of responses (every static asset) set no
+// cookies, and EncodeHeaders always emits the canonical "Set-Cookie" key.
+func (b *Bridge) captureCookies(headersJSON string) {
+	if b.jar == nil || !strings.Contains(headersJSON, "Set-Cookie") {
+		return
+	}
+	if h := core.DecodeHeaders(headersJSON); len(h) > 0 {
+		b.jar.setFromResponse(h)
+	}
 }
 
 // injectCookies adds the jar's cookies to the request. WebViews don't manage

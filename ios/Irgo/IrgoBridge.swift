@@ -72,14 +72,31 @@ public struct IrgoResponse {
     init(from response: CoreResponse) {
         self.status = Int(response.status)
         self.body = response.body ?? Data()
+        self.headers = IrgoResponse.parseHeaders(response.headers)
+    }
 
-        // Parse headers from JSON
-        if let headersData = response.headers.data(using: .utf8),
-           let parsed = try? JSONSerialization.jsonObject(with: headersData) as? [String: String] {
-            self.headers = parsed
-        } else {
-            self.headers = [:]
+    /// Parse the bridge's headers wire format. Values may be a string or an
+    /// array of strings (multi-value headers such as Set-Cookie); arrays are
+    /// joined with ", " for this flat [String: String] view. A plain
+    /// [String: String] cast would fail wholesale — dropping ALL headers,
+    /// including Content-Type — as soon as any value is an array.
+    static func parseHeaders(_ headersJSON: String) -> [String: String] {
+        guard let data = headersJSON.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
         }
+        var headers: [String: String] = [:]
+        for (key, value) in object {
+            if let single = value as? String {
+                headers[key] = single
+            } else if let many = value as? [Any] {
+                let strings = many.compactMap { $0 as? String }
+                if !strings.isEmpty {
+                    headers[key] = strings.joined(separator: ", ")
+                }
+            }
+        }
+        return headers
     }
 }
 

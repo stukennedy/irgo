@@ -104,9 +104,27 @@ func buildIOS(modulePath string) error {
 	if err := runGomobileCommand("bind", "-target", "ios", "-o", outPath, mobilePackage); err != nil {
 		return fmt.Errorf("gomobile bind failed: %w", err)
 	}
+	writeArtifactStamp("build/ios")
 
 	fmt.Printf("iOS framework built: %s\n", outPath)
 	return nil
+}
+
+// Artifact version stamps: dev mode reuses previously built frameworks/AARs,
+// but a framework built by an older irgo exposes an older bridge API and the
+// native shells fail to compile against it. The stamp forces a rebuild after
+// an irgo upgrade.
+
+func writeArtifactStamp(dir string) {
+	_ = os.WriteFile(filepath.Join(dir, ".irgo-version"), []byte(version), 0644)
+}
+
+func artifactUpToDate(artifact, stampDir string) bool {
+	if _, err := os.Stat(artifact); err != nil {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Join(stampDir, ".irgo-version"))
+	return err == nil && strings.TrimSpace(string(data)) == version
 }
 
 func buildAndroid(modulePath string) error {
@@ -129,6 +147,7 @@ func buildAndroid(modulePath string) error {
 	if err := runGomobileCommand("bind", "-target", "android", "-o", outPath, mobilePackage); err != nil {
 		return fmt.Errorf("gomobile bind failed: %w", err)
 	}
+	writeArtifactStamp("build/android")
 
 	fmt.Printf("Android AAR built: %s\n", outPath)
 
@@ -254,14 +273,15 @@ func runIOS(devMode bool) error {
 
 		// Dev mode serves the app from localhost:8080, so a fresh gomobile
 		// build isn't needed. The Xcode project still links against
-		// build/ios/Irgo.xcframework, so build it only if it doesn't exist.
-		if _, err := os.Stat("build/ios/Irgo.xcframework"); os.IsNotExist(err) {
+		// build/ios/Irgo.xcframework, so build it only when missing or built
+		// by a different irgo version (stale bridge API).
+		if !artifactUpToDate("build/ios/Irgo.xcframework", "build/ios") {
 			modulePath, err := getModulePath()
 			if err != nil {
 				return fmt.Errorf("could not determine module path: %w", err)
 			}
 
-			fmt.Println("Building iOS framework (not found - first run)...")
+			fmt.Println("Building iOS framework (missing or built by another irgo version)...")
 			if err := buildIOS(modulePath); err != nil {
 				return err
 			}
@@ -441,15 +461,16 @@ func runAndroid(devMode bool) error {
 
 		// Dev mode serves the app from the dev server, so a fresh gomobile
 		// build isn't needed. The Gradle project still links against
-		// app/libs/irgo.aar, so build it only if it doesn't exist.
+		// app/libs/irgo.aar, so build it only when missing or built by a
+		// different irgo version (stale bridge API).
 		aarPath := filepath.Join(androidProjectPath, "app/libs/irgo.aar")
-		if _, err := os.Stat(aarPath); os.IsNotExist(err) {
+		if !artifactUpToDate(aarPath, "build/android") {
 			modulePath, err := getModulePath()
 			if err != nil {
 				return fmt.Errorf("could not determine module path: %w", err)
 			}
 
-			fmt.Println("Building Android AAR (not found - first run)...")
+			fmt.Println("Building Android AAR (missing or built by another irgo version)...")
 			if err := buildAndroid(modulePath); err != nil {
 				return err
 			}
