@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-var version = "0.3.1"
+var version = "0.4.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -114,6 +114,7 @@ Examples:
   irgo run ios           Build and run on iOS Simulator
   irgo run ios --dev     Hot-reload mode (connects to dev server)
   irgo run android       Build and run on Android Emulator
+  irgo run android --dev Hot-reload mode (connects to dev server)
   irgo run desktop       Run as desktop app
   irgo run desktop --dev Desktop app with devtools enabled
   irgo build ios         Build iOS framework only
@@ -192,12 +193,14 @@ Usage:
   irgo run ios              Build and run on iOS Simulator
   irgo run ios --dev        Run iOS with hot-reload (connects to dev server)
   irgo run android          Build and run on Android Emulator
+  irgo run android --dev    Run Android with hot-reload (connects to dev server)
   irgo run desktop          Run as desktop app
   irgo run desktop --dev    Run desktop app with devtools enabled
 
 Flags:
   --dev, -d    Development mode.
-               - Mobile: Connects to localhost:8080 for hot-reload
+               - Mobile: Connects to the dev server for hot-reload
+                 (iOS Simulator: localhost:8080, Android Emulator: 10.0.2.2:8080)
                - Desktop: Enables browser devtools in webview
 
 Requirements:
@@ -211,10 +214,13 @@ Mobile standard mode (without --dev):
   3. Installs and launches on simulator/emulator
 
 Mobile dev mode (with --dev):
-  1. Starts the dev server (hot-reload)
-  2. Builds iOS app without gomobile framework
-  3. Launches simulator connected to localhost:8080
-  4. Code changes instantly reflect in the app
+  1. Starts the dev server with hot reload (air on localhost:8080)
+  2. Builds the gomobile framework/AAR only if it doesn't exist yet
+     (delete build/ios/Irgo.xcframework or android/Example/app/libs/irgo.aar
+     to force a rebuild - the native app still links against it)
+  3. Builds, installs and launches the native app on the simulator/emulator
+  4. The app loads its UI from the dev server, so Go code changes
+     are reflected instantly without rebuilding the native app
 
 Desktop mode:
   1. Starts local HTTP server on auto-selected port

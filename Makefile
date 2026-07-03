@@ -34,7 +34,6 @@ install-tools:
 	go install golang.org/x/mobile/cmd/gomobile@latest
 	go install github.com/air-verse/air@latest
 	gomobile init
-	@echo "Also install: brew install entr (for file watching)"
 
 # Generate templ files
 templ:
@@ -66,10 +65,10 @@ android: build
 	@echo "  3. Copy android/app/src/main/kotlin/com/irgo/*.kt to your project"
 	@echo "  4. Extend IrgoActivity in your MainActivity"
 
-# Bundle JavaScript
+# Bundle JavaScript (the bridge is also embedded in Go and served at /_irgo/bridge.js)
 js:
 	@mkdir -p $(BUILD_DIR)/js
-	cp js/irgo-bridge.js $(BUILD_DIR)/js/
+	cp pkg/bridgejs/irgo-bridge.js $(BUILD_DIR)/js/
 	@echo "JavaScript bundled: $(BUILD_DIR)/js/irgo-bridge.js"
 
 # Build all platforms
@@ -159,6 +158,6 @@ help:
 	@echo "  make install-tools - Install dev tools (templ, gomobile, air)"
 	@echo ""
 	@echo "Release:"
-	@echo "  make release       - Release patch version (0.2.2 -> 0.2.3)"
-	@echo "  make release-minor - Release minor version (0.2.2 -> 0.3.0)"
-	@echo "  make release-major - Release major version (0.2.2 -> 1.0.0)"
+	@echo "  make release       - Release patch version (0.4.0 -> 0.4.1)"
+	@echo "  make release-minor - Release minor version (0.4.0 -> 0.5.0)"
+	@echo "  make release-major - Release major version (0.4.0 -> 1.0.0)"

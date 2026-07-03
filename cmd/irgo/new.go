@@ -13,7 +13,11 @@ import (
 	"strings"
 )
 
-//go:embed templates/*
+// Use the all: prefix so files starting with "." or "_" (e.g. .gitignore,
+// .air.toml, files under hidden directories) are embedded too - plain
+// go:embed patterns skip them inside matched directories.
+//
+//go:embed all:templates
 var templateFS embed.FS
 
 // Datastar files to download during project creation
@@ -283,8 +287,15 @@ func newProject(name string) error {
 			contentStr = strings.ReplaceAll(contentStr, "{{REPLACE_DIRECTIVE}}", "")
 		}
 
+		// Shell scripts and gradle wrappers must be executable
+		fileMode := os.FileMode(0644)
+		base := filepath.Base(destPath)
+		if strings.HasSuffix(base, ".sh") || base == "gradlew" {
+			fileMode = 0755
+		}
+
 		// Write file
-		if err := os.WriteFile(destPath, []byte(contentStr), 0644); err != nil {
+		if err := os.WriteFile(destPath, []byte(contentStr), fileMode); err != nil {
 			return fmt.Errorf("writing %s: %w", destPath, err)
 		}
 
@@ -346,6 +357,11 @@ func newProject(name string) error {
 	fmt.Printf("  cd %s\n", projectDir)
 	fmt.Println("  bun install        # or: npm install")
 	fmt.Println("  irgo dev           # start development server")
+	fmt.Println()
+	fmt.Println("Run on a device or desktop:")
+	fmt.Println("  irgo run ios       # iOS Simulator")
+	fmt.Println("  irgo run android   # Android Emulator")
+	fmt.Println("  irgo run desktop   # native desktop window")
 	fmt.Println()
 
 	return nil

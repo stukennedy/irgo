@@ -56,7 +56,6 @@ install-tools:
 	go install github.com/air-verse/air@latest
 	go install golang.org/x/mobile/cmd/gomobile@latest
 	go install github.com/stukennedy/irgo/cmd/irgo@latest
-	@echo "Also install: brew install entr"
 
 # Show help
 help:

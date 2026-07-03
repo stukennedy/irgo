@@ -27,15 +27,16 @@ func TestHomePageDatastar(t *testing.T) {
 	resp.AssertSSE(t)
 }
 
-// Example test for a form submission
+// Example test for a Datastar form submission
 // func TestCreateItem(t *testing.T) {
 // 	r := app.NewRouter()
 // 	client := irgotest.NewClient(r.Handler())
 //
-// 	resp := client.HTMX().PostForm("/items", map[string]string{
+// 	resp := client.Datastar().PostForm("/items", map[string]string{
 // 		"name": "Test Item",
 // 	})
 // 	resp.AssertOK(t)
+// 	resp.AssertSSE(t)
 // 	resp.AssertContains(t, "Test Item")
 // }
 

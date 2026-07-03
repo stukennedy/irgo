@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // runDesktop builds and runs a desktop app
@@ -86,7 +87,7 @@ func buildDesktopMacOS(modulePath string) error {
 	}
 
 	// Generate Info.plist
-	plistContent := generateMacOSPlist(appName, modulePath)
+	plistContent := generateMacOSPlist(appName, bundleIDFromModulePath(modulePath))
 	plistPath := filepath.Join(appBundle, "Contents", "Info.plist")
 	if err := os.WriteFile(plistPath, []byte(plistContent), 0644); err != nil {
 		return fmt.Errorf("could not write Info.plist: %w", err)
@@ -159,6 +160,51 @@ func buildDesktopLinux(modulePath string) error {
 
 	fmt.Printf("Linux app built: %s\n", binaryPath)
 	return nil
+}
+
+// bundleIDFromModulePath converts a Go module path into a valid reverse-DNS
+// style CFBundleIdentifier. A raw module path like "github.com/user/app" is
+// invalid (contains slashes); it becomes "com.github.user.app". A bare module
+// name like "myapp" becomes "com.irgo.myapp". Characters outside
+// [A-Za-z0-9.-] are stripped.
+func bundleIDFromModulePath(modulePath string) string {
+	segments := strings.Split(modulePath, "/")
+
+	var parts []string
+	if len(segments) > 1 && strings.Contains(segments[0], ".") {
+		// First segment is a host name (e.g. github.com) - reverse it
+		host := strings.Split(segments[0], ".")
+		for i, j := 0, len(host)-1; i < j; i, j = i+1, j-1 {
+			host[i], host[j] = host[j], host[i]
+		}
+		parts = append(parts, host...)
+		parts = append(parts, segments[1:]...)
+	} else if len(segments) > 1 {
+		parts = segments
+	} else {
+		// Bare module name like "myapp"
+		parts = append([]string{"com", "irgo"}, segments...)
+	}
+
+	// Strip invalid characters from each part and drop empty parts
+	sanitized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		var b strings.Builder
+		for _, r := range part {
+			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') ||
+				(r >= '0' && r <= '9') || r == '-' {
+				b.WriteRune(r)
+			}
+		}
+		if b.Len() > 0 {
+			sanitized = append(sanitized, b.String())
+		}
+	}
+
+	if len(sanitized) == 0 {
+		return "com.irgo.app"
+	}
+	return strings.Join(sanitized, ".")
 }
 
 func generateMacOSPlist(appName, bundleID string) string {

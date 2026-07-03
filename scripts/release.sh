@@ -94,8 +94,9 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 # Update version in main.go
+# (sed -i.bak works on both GNU and BSD sed; plain -i '' is BSD-only)
 info "Updating version in $VERSION_FILE..."
-sed -i '' "s/var version = \".*\"/var version = \"$NEW_VERSION\"/" "$VERSION_FILE"
+sed -i.bak "s/var version = \".*\"/var version = \"$NEW_VERSION\"/" "$VERSION_FILE" && rm -f "$VERSION_FILE.bak"
 
 # Verify the change
 NEW_FILE_VERSION=$(grep 'var version' "$VERSION_FILE" | sed 's/.*"\(.*\)".*/\1/')

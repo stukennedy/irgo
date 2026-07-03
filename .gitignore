@@ -1,3 +1,19 @@
 # Compiled CLI binary at repo root only — anchored so it does not match
 # directories named "irgo" (e.g. the android com/irgo package or cmd/irgo).
 /irgo
+
+# Compiled example binaries at repo root
+/todo
+/gohtmx
+
+# Dev server reload marker
+.reload-signal
+
+# Build outputs
+/build/ios/
+/build/android/
+build/ios/DerivedData/
+/dist/
+
+# Node dependencies
+node_modules/
