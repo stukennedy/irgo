@@ -322,6 +322,73 @@ templ LoadButton() {
 }
 ```
 
+## Native Capabilities
+
+Call platform features (haptics, clipboard, share, storage, notifications)
+with one API on every platform.
+
+From templates / Datastar expressions (promise-based `irgo.native`):
+
+```go
+templ ShareButton(text string) {
+    <button data-on:click={ fmt.Sprintf("irgo.native('share.text', {text: %q})", text) }>
+        Share
+    </button>
+}
+```
+
+From Go handlers:
+
+```go
+import "github.com/stukennedy/irgo/pkg/native"
+
+native.Call(ctx.Context(), "haptics.impact", native.Params{"style": "light"})
+```
+
+Built-in methods: `device.info`, `haptics.impact/notification/selection`,
+`clipboard.read/write`, `share.text`, `browser.open`,
+`storage.get/set/remove`, `notifications.requestPermission/show`,
+`toast.show` (Android). Unsupported methods return
+`native.ErrNotSupported` — degrade gracefully. Register Go fallbacks with
+`native.Register(method, handler)` so web/desktop work too. Custom native
+features: implement `IrgoPlugin` in `ios/.../IrgoPlugins.swift` or
+`android/.../IrgoPlugins.kt` and register it.
+
+## Sessions & Cookies
+
+Standard `http.SetCookie` session auth works on all platforms — the mobile
+bridge keeps a persistent cookie jar (sessions survive app restarts). Use
+`mobile.ClearCookies()` for logout.
+
+## Script Order
+
+The layout must load the framework JS bridge **before** Datastar (both are
+served automatically — no files to copy):
+
+```html
+<script src="/_irgo/bridge.js"></script>
+<script src="/static/js/datastar.js"></script>
+```
+
+## Streaming / Real-Time
+
+SSE streams progressively on every platform, including mobile. Long-lived
+handlers must watch for disconnect:
+
+```go
+r.DSGet("/live", func(ctx *router.Context) error {
+    sse := ctx.SSE()
+    for {
+        select {
+        case <-sse.Context().Done():
+            return nil // client went away
+        case update := <-updates:
+            sse.PatchTempl(templates.LiveRow(update))
+        }
+    }
+})
+```
+
 ## Build Tags
 
 The framework uses Go build tags to separate platform code:
