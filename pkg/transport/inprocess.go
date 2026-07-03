@@ -75,7 +75,19 @@ func (t *InProcessTransport) OpenChannel(ctx context.Context, url string) (Chann
 		return nil, err
 	}
 
-	return newInProcessChannel(session, t.config.ChannelBufferSize), nil
+	ch := newInProcessChannel(session, t.config.ChannelBufferSize)
+
+	// This is the client end of the channel: forward server-side sends
+	// (session.SendChan) into Receive(), and close the channel when the
+	// session closes.
+	go func() {
+		defer ch.Close()
+		for envelope := range session.SendChan {
+			ch.deliverMessage(envelopeToMessage(envelope))
+		}
+	}()
+
+	return ch, nil
 }
 
 // RegisterChannelHandler sets the handler for channels matching a URL pattern.

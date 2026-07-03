@@ -1,6 +1,12 @@
 // Package desktop provides desktop application support using webview.
 // Desktop mode uses a real HTTP server (like dev mode) with a native webview
 // window pointing to localhost.
+//
+// The webview dependency (CGO: WebKitGTK on Linux, WebView2 on Windows,
+// WKWebView on macOS) is only compiled when building with -tags desktop —
+// which `irgo run desktop` and `irgo build desktop` add automatically. This
+// keeps `go build ./...`, `go vet ./...`, and `go test ./...` working on
+// machines without the native webview development packages.
 package desktop
 
 import (
@@ -10,8 +16,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	webview "github.com/webview/webview_go"
 
 	"github.com/stukennedy/irgo/pkg/transport"
 	ws "github.com/stukennedy/irgo/pkg/websocket"
@@ -51,7 +55,7 @@ type App struct {
 	handler   http.Handler
 	wsHub     *ws.Hub
 	transport transport.Transport
-	wv        webview.WebView
+	wv        webviewHandle // see webview_desktop.go / webview_stub.go
 	wg        sync.WaitGroup
 }
 
@@ -106,7 +110,10 @@ func (a *App) Run() error {
 	}
 
 	// Run webview (blocks until window closed)
-	a.runWebview()
+	if err := a.runWebview(); err != nil {
+		_ = a.Shutdown()
+		return err
+	}
 
 	// Cleanup
 	return a.Shutdown()
@@ -158,36 +165,6 @@ func (a *App) Hub() *ws.Hub {
 	return a.wsHub
 }
 
-func (a *App) runWebview() {
-	a.wv = webview.New(a.config.Debug)
-	defer a.wv.Destroy()
-
-	a.wv.SetTitle(a.config.Title)
-
-	if a.config.Resizable {
-		a.wv.SetSize(a.config.Width, a.config.Height, webview.HintNone)
-	} else {
-		a.wv.SetSize(a.config.Width, a.config.Height, webview.HintFixed)
-	}
-
-	// Inject the secret into the webview before navigation
-	// Using Init() ensures the script runs before any page scripts
-	cfg := a.transport.Config()
-	if cfg != nil && cfg.Secret != "" {
-		js := "window.__IRGO_SECRET__ = '" + cfg.Secret + "';"
-		a.wv.Init(js)
-	}
-
-	// Navigate to the server URL
-	url := a.URL()
-	if url != "" {
-		a.wv.Navigate(url)
-	}
-
-	// Run blocks until window is closed
-	a.wv.Run()
-}
-
 // Shutdown gracefully stops the app
 func (a *App) Shutdown() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -199,22 +176,6 @@ func (a *App) Shutdown() error {
 
 	a.wg.Wait()
 	return nil
-}
-
-// Bind binds a Go function to a JavaScript name in the webview
-func (a *App) Bind(name string, fn interface{}) error {
-	if a.wv == nil {
-		return fmt.Errorf("webview not initialized")
-	}
-	a.wv.Bind(name, fn)
-	return nil
-}
-
-// Eval evaluates JavaScript in the webview
-func (a *App) Eval(js string) {
-	if a.wv != nil {
-		a.wv.Eval(js)
-	}
 }
 
 // RegisterChannelHandler registers a handler for WebSocket channels matching a pattern

@@ -30,7 +30,9 @@ type Session struct {
 
 	// closed tracks if the session has been closed.
 	closed bool
-	mu     sync.RWMutex
+	// done is closed when the session closes, for select-based waiting.
+	done chan struct{}
+	mu   sync.RWMutex
 }
 
 type pendingRequest struct {
@@ -78,17 +80,22 @@ func NewSession(id, url string, handler MessageHandler) *Session {
 		Handler:   handler,
 		pending:   make(map[string]*pendingRequest),
 		metadata:  make(map[string]any),
+		done:      make(chan struct{}),
 	}
 }
 
 // Send queues an envelope to be sent to the client.
+// Returns false if the session is closed or the send buffer is full.
 func (s *Session) Send(envelope *Envelope) bool {
+	// The read lock must be held across the channel send: Close takes the
+	// write lock before closing SendChan, so holding the read lock here
+	// guarantees the channel cannot be closed mid-send (send on a closed
+	// channel panics).
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.closed {
-		s.mu.RUnlock()
 		return false
 	}
-	s.mu.RUnlock()
 
 	select {
 	case s.SendChan <- envelope:
@@ -136,13 +143,20 @@ func (s *Session) Close() {
 		return
 	}
 	s.closed = true
-	s.mu.Unlock()
-
+	// Closing SendChan under the write lock pairs with Send holding the
+	// read lock across its channel send — no send can race this close.
 	close(s.SendChan)
+	close(s.done)
+	s.mu.Unlock()
 
 	if s.Handler != nil {
 		s.Handler.OnClose(s)
 	}
+}
+
+// Done returns a channel that is closed when the session closes.
+func (s *Session) Done() <-chan struct{} {
+	return s.done
 }
 
 // IsClosed returns true if the session has been closed.

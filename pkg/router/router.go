@@ -3,9 +3,13 @@ package router
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/stukennedy/irgo/pkg/bridgejs"
+	"github.com/stukennedy/irgo/pkg/native"
 )
 
 // FragmentHandler is a handler function that returns an HTML fragment.
@@ -21,9 +25,17 @@ type SSEHandler func(ctx *Context) error
 // Router wraps chi with hypermedia-specific conventions.
 type Router struct {
 	mux *chi.Mux
+
+	// framework endpoints (/_irgo/*) are registered lazily on first serve —
+	// chi requires all middleware to be added before any route, so they
+	// cannot be registered in New().
+	framework     bool
+	frameworkOnce sync.Once
 }
 
-// New creates a new Router with default middleware.
+// New creates a new Router with default middleware. The framework endpoints
+// GET /_irgo/bridge.js (the JS bridge) and POST /_irgo/native (Go-side
+// native-capability fallback for web/desktop) are served automatically.
 func New() *Router {
 	r := chi.NewRouter()
 
@@ -32,16 +44,28 @@ func New() *Router {
 	r.Use(middleware.RequestID)
 	r.Use(DatastarRequestMiddleware)
 
-	return &Router{mux: r}
+	return &Router{mux: r, framework: true}
 }
 
-// NewWithoutMiddleware creates a Router without default middleware.
+// NewWithoutMiddleware creates a Router without default middleware or
+// framework endpoints.
 func NewWithoutMiddleware() *Router {
 	return &Router{mux: chi.NewRouter()}
 }
 
+func (r *Router) ensureFrameworkRoutes() {
+	if !r.framework {
+		return
+	}
+	r.frameworkOnce.Do(func() {
+		r.mux.Get("/_irgo/bridge.js", bridgejs.Handler)
+		r.mux.Post("/_irgo/native", native.HTTPHandler)
+	})
+}
+
 // Handler returns the underlying http.Handler for use with the adapter.
 func (r *Router) Handler() http.Handler {
+	r.ensureFrameworkRoutes()
 	return r.mux
 }
 
@@ -201,5 +225,6 @@ func (r *Router) Static(pattern string, root http.FileSystem) {
 
 // ServeHTTP implements http.Handler.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	r.ensureFrameworkRoutes()
 	r.mux.ServeHTTP(w, req)
 }

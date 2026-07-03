@@ -382,15 +382,7 @@ type sessionChannelAdapter struct {
 func (a *sessionChannelAdapter) ID() string  { return a.session.ID }
 func (a *sessionChannelAdapter) URL() string { return a.session.URL }
 func (a *sessionChannelAdapter) Done() <-chan struct{} {
-	// Session doesn't expose a done channel, create one
-	done := make(chan struct{})
-	go func() {
-		for range a.session.SendChan {
-			// Drain until closed
-		}
-		close(done)
-	}()
-	return done
+	return a.session.Done()
 }
 
 func (a *sessionChannelAdapter) Send(msg *Message) error {
@@ -440,5 +432,16 @@ func messageToEnvelope(msg *Message) *ws.Envelope {
 		Swap:      msg.Swap,
 		Payload:   string(msg.Payload),
 		RequestID: msg.ID,
+	}
+}
+
+func envelopeToMessage(env *ws.Envelope) *Message {
+	return &Message{
+		Channel: env.Channel,
+		Format:  env.Format,
+		Target:  env.Target,
+		Swap:    env.Swap,
+		Payload: []byte(env.Payload),
+		ID:      env.RequestID,
 	}
 }

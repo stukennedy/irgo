@@ -37,10 +37,11 @@ func (a *HTTPAdapter) HandleRequest(req *core.Request) *core.Response {
 
 	httpReq := httptest.NewRequest(req.Method, req.URL, body)
 
-	// Apply headers from core.Request
-	headers := req.GetHeaders()
-	for k, v := range headers {
-		httpReq.Header.Set(k, v)
+	// Apply headers from core.Request (preserving multi-valued headers)
+	for k, values := range req.HTTPHeaders() {
+		for _, v := range values {
+			httpReq.Header.Add(k, v)
+		}
 	}
 
 	// Create ResponseRecorder to capture output
@@ -59,15 +60,7 @@ func (a *HTTPAdapter) HandleRequest(req *core.Request) *core.Response {
 		Status: result.StatusCode,
 		Body:   respBody,
 	}
-
-	// Flatten response headers
-	respHeaders := make(map[string]string)
-	for k, v := range result.Header {
-		if len(v) > 0 {
-			respHeaders[k] = v[0]
-		}
-	}
-	resp.SetHeaders(respHeaders)
+	resp.SetHTTPHeaders(result.Header)
 
 	return resp
 }

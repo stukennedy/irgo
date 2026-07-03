@@ -133,6 +133,13 @@
       }
     },
 
+    // Cancel an in-flight streaming HTTP request
+    httpRequestCancel(requestId) {
+      if (isAndroid && typeof window.Irgo.httpRequestCancel === "function") {
+        window.Irgo.httpRequestCancel(requestId);
+      }
+    },
+
     // WebSocket close
     wsClose(sessionId, code, reason) {
       if (isIOS) {
@@ -151,6 +158,13 @@
   // Pending request registries
   const pendingHttpRequests = new Map();
   const pendingWsConnects = new Map();
+  const pendingStreams = new Map();
+  const pendingNativeCalls = new Map();
+
+  // Streaming HTTP support (progressive SSE) requires the httpRequestStream
+  // native method; older shells fall back to buffered requests.
+  const hasAndroidStreaming =
+    isAndroid && typeof window.Irgo.httpRequestStream === "function";
 
   // ========================================
   // VIRTUAL WEBSOCKET IMPLEMENTATION
@@ -384,16 +398,21 @@
     );
   }
 
-  // Decode a base64 string (produced from raw UTF-8 bytes by the native side)
-  // back into a JS string. Plain atob() yields a Latin-1 "binary string" which
-  // corrupts multi-byte UTF-8 (e.g. curly quotes, emoji), so we re-decode.
-  function decodeBase64Utf8(b64) {
+  // Decode a base64 string into raw bytes.
+  function base64ToBytes(b64) {
     const binary = atob(b64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i);
     }
-    return new TextDecoder("utf-8").decode(bytes);
+    return bytes;
+  }
+
+  // Decode a base64 string (produced from raw UTF-8 bytes by the native side)
+  // back into a JS string. Plain atob() yields a Latin-1 "binary string" which
+  // corrupts multi-byte UTF-8 (e.g. curly quotes, emoji), so we re-decode.
+  function decodeBase64Utf8(b64) {
+    return new TextDecoder("utf-8").decode(base64ToBytes(b64));
   }
 
   // Normalize fetch() headers (Headers | array | object | undefined) to a
@@ -556,6 +575,244 @@
   }
 
   // ========================================
+  // STREAMING HTTP (progressive SSE)
+  // ========================================
+
+  // Native chunk callbacks. The native side calls these as Go flushes the
+  // response, letting Datastar process SSE events while the handler is still
+  // running - true streaming instead of one buffered blob at the end.
+
+  window._irgo_stream_response = function (requestId, status, headersJSON) {
+    const stream = pendingStreams.get(requestId);
+    if (!stream) return;
+
+    const responseHeaders = new Headers();
+    let parsed = {};
+    try {
+      parsed = headersJSON ? JSON.parse(headersJSON) : {};
+    } catch (e) {
+      parsed = {};
+    }
+    for (const key in parsed) {
+      if (!Object.prototype.hasOwnProperty.call(parsed, key)) continue;
+      const value = parsed[key];
+      try {
+        if (Array.isArray(value)) {
+          for (const v of value) responseHeaders.append(key, v);
+        } else {
+          responseHeaders.set(key, value);
+        }
+      } catch (e) {
+        // Skip headers the Headers API forbids setting.
+      }
+    }
+
+    const st = status || 200;
+    // 204/205/304 must have a null body per the Fetch spec.
+    const nullBody = st === 204 || st === 205 || st === 304;
+
+    let bodyStream = null;
+    if (!nullBody) {
+      bodyStream = new ReadableStream({
+        start(controller) {
+          stream.controller = controller;
+        },
+        cancel() {
+          stream.cancelled = true;
+          pendingStreams.delete(requestId);
+          NativeBridge.httpRequestCancel(requestId);
+        },
+      });
+    }
+
+    stream.resolve(new Response(bodyStream, { status: st, headers: responseHeaders }));
+    if (nullBody) {
+      pendingStreams.delete(requestId);
+    }
+  };
+
+  window._irgo_stream_chunk = function (requestId, base64Chunk) {
+    const stream = pendingStreams.get(requestId);
+    if (!stream || stream.cancelled || !stream.controller) return;
+    try {
+      stream.controller.enqueue(base64ToBytes(base64Chunk));
+    } catch (e) {
+      // Stream already closed/errored - stop delivery.
+      stream.cancelled = true;
+      pendingStreams.delete(requestId);
+      NativeBridge.httpRequestCancel(requestId);
+    }
+  };
+
+  window._irgo_stream_complete = function (requestId, errorMessage) {
+    const stream = pendingStreams.get(requestId);
+    if (!stream) return;
+    pendingStreams.delete(requestId);
+
+    if (errorMessage) {
+      if (stream.controller && !stream.cancelled) {
+        try {
+          stream.controller.error(new Error(errorMessage));
+        } catch (e) {
+          /* already closed */
+        }
+      } else {
+        stream.reject(new Error(errorMessage));
+      }
+      return;
+    }
+    if (stream.controller && !stream.cancelled) {
+      try {
+        stream.controller.close();
+      } catch (e) {
+        /* already closed */
+      }
+    }
+  };
+
+  // Issue a streaming request through the native bridge, resolving to a
+  // fetch Response whose body is a live ReadableStream.
+  function nativeStreamingFetch(method, path, headers, bodyString, signal) {
+    return new Promise(function (resolve, reject) {
+      const requestId = generateUUID();
+      pendingStreams.set(requestId, {
+        resolve,
+        reject,
+        controller: null,
+        cancelled: false,
+      });
+
+      if (signal) {
+        if (signal.aborted) {
+          pendingStreams.delete(requestId);
+          reject(makeAbortError());
+          return;
+        }
+        signal.addEventListener("abort", function () {
+          const stream = pendingStreams.get(requestId);
+          if (!stream) return;
+          stream.cancelled = true;
+          pendingStreams.delete(requestId);
+          NativeBridge.httpRequestCancel(requestId);
+          if (stream.controller) {
+            try {
+              stream.controller.error(makeAbortError());
+            } catch (e) {
+              /* already closed */
+            }
+          } else {
+            stream.reject(makeAbortError());
+          }
+        });
+      }
+
+      window.Irgo.httpRequestStream(
+        requestId,
+        method,
+        path,
+        JSON.stringify(headers),
+        bodyString || "",
+      );
+    });
+  }
+
+  function makeAbortError() {
+    try {
+      return new DOMException("The operation was aborted.", "AbortError");
+    } catch (e) {
+      const err = new Error("The operation was aborted.");
+      err.name = "AbortError";
+      return err;
+    }
+  }
+
+  // ========================================
+  // NATIVE CAPABILITIES - irgo.native()
+  // ========================================
+
+  // Result callback shared by iOS and Android plugin registries.
+  window._irgo_native_result = function (requestId, ok, payloadJSON) {
+    const pending = pendingNativeCalls.get(requestId);
+    if (!pending) return;
+    pendingNativeCalls.delete(requestId);
+
+    let payload = null;
+    if (payloadJSON) {
+      try {
+        payload = JSON.parse(payloadJSON);
+      } catch (e) {
+        payload = payloadJSON;
+      }
+    }
+
+    if (ok) {
+      pending.resolve(payload);
+    } else if (payloadJSON === "IRGO_NOT_SUPPORTED") {
+      // No native plugin claimed the method - fall back to the Go-side
+      // registry via the /_irgo/native endpoint (served through the
+      // virtual bridge on mobile, real HTTP on web/desktop).
+      httpNativeCall(pending.method, pending.params).then(
+        pending.resolve,
+        pending.reject,
+      );
+    } else {
+      pending.reject(new Error(String(payload || "native call failed")));
+    }
+  };
+
+  function httpNativeCall(method, params) {
+    return window
+      .fetch("/_irgo/native", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method, params: params || {} }),
+      })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (data && data.ok) return data.result;
+          const message =
+            data && data.error ? data.error : "native call failed";
+          const err = new Error(message);
+          if (res.status === 501) err.notSupported = true;
+          throw err;
+        });
+      });
+  }
+
+  // Invoke a native capability: nativeCall('haptics.impact', {style: 'light'})
+  // Resolution: platform plugin first, then Go-registered fallback handlers.
+  // Returns a promise for the method's result (or null).
+  function nativeCall(method, params) {
+    if (typeof method !== "string" || !method) {
+      return Promise.reject(new Error("irgo.native: method name required"));
+    }
+
+    if (isIOS) {
+      return new Promise(function (resolve, reject) {
+        const requestId = generateUUID();
+        pendingNativeCalls.set(requestId, { resolve, reject, method, params });
+        window.webkit.messageHandlers.irgo.postMessage({
+          type: "native",
+          requestId,
+          method,
+          params: JSON.stringify(params || {}),
+        });
+      });
+    }
+
+    if (isAndroid && typeof window.Irgo.nativeInvoke === "function") {
+      return new Promise(function (resolve, reject) {
+        const requestId = generateUUID();
+        pendingNativeCalls.set(requestId, { resolve, reject, method, params });
+        window.Irgo.nativeInvoke(requestId, method, JSON.stringify(params || {}));
+      });
+    }
+
+    // Web/desktop (or an older shell): Go-side handlers only.
+    return httpNativeCall(method, params);
+  }
+
+  // ========================================
   // ANDROID FETCH INTERCEPTION
   // ========================================
 
@@ -571,11 +828,13 @@
       let method;
       let headers;
       let body;
+      let signal = init.signal;
 
       if (typeof Request !== "undefined" && input instanceof Request) {
         rawUrl = input.url;
         method = (init.method || input.method || "GET").toUpperCase();
         headers = headersToObject(init.headers || input.headers);
+        if (!signal) signal = input.signal;
         if (init.body != null) {
           body = init.body;
         } else if (method !== "GET" && method !== "HEAD") {
@@ -604,6 +863,12 @@
 
       const bodyString = await bodyToString(body);
 
+      // Preferred: streaming path (progressive SSE).
+      if (hasAndroidStreaming) {
+        return nativeStreamingFetch(method, path, headers, bodyString, signal);
+      }
+
+      // Legacy shells: buffered request/response.
       const res = await NativeBridge.httpRequest(method, path, headers, bodyString);
 
       const responseHeaders = new Headers();
@@ -611,7 +876,12 @@
         for (const key in res.headers) {
           if (Object.prototype.hasOwnProperty.call(res.headers, key)) {
             try {
-              responseHeaders.set(key, res.headers[key]);
+              const value = res.headers[key];
+              if (Array.isArray(value)) {
+                for (const v of value) responseHeaders.append(key, v);
+              } else {
+                responseHeaders.set(key, value);
+              }
             } catch (e) {
               // Skip headers the Headers API forbids setting.
             }
@@ -645,6 +915,12 @@
     isAndroid,
     VirtualWebSocket,
     NativeBridge,
+
+    // Invoke a native capability, e.g.:
+    //   irgo.native('haptics.impact', {style: 'light'})
+    //   irgo.native('clipboard.write', {text: 'hello'})
+    // Resolves with the method's result; rejects if unsupported everywhere.
+    native: nativeCall,
 
     // Navigate programmatically
     navigate: function (path) {

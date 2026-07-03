@@ -8,9 +8,12 @@ import (
 
 // Response represents the hypermedia response back to the WebView.
 // Body contains HTML fragments or SSE events for Datastar to process.
+//
+// Headers is a JSON object. Each value may be either a string (the common
+// case) or an array of strings for multi-valued headers such as Set-Cookie.
 type Response struct {
 	Status  int    // HTTP status code (200, 404, 500, etc.)
-	Headers string // JSON-encoded response headers
+	Headers string // JSON-encoded headers: string or []string values
 	Body    []byte // HTML fragment (or JSON for capability responses)
 }
 
@@ -24,54 +27,61 @@ func NewResponse(status int) *Response {
 
 // GetHeader returns a response header value.
 // Header lookup is case-insensitive per HTTP spec.
+// For multi-valued headers, the first value is returned.
 func (r *Response) GetHeader(key string) string {
-	if r.Headers == "" || r.Headers == "{}" {
-		return ""
-	}
-	var headers map[string]string
-	if err := json.Unmarshal([]byte(r.Headers), &headers); err != nil {
-		return ""
-	}
-	// Try exact match first
-	if v, ok := headers[key]; ok {
-		return v
-	}
-	// Try canonical header key (HTTP headers are case-insensitive)
-	canonical := http.CanonicalHeaderKey(key)
-	return headers[canonical]
+	return DecodeHeaders(r.Headers).Get(key)
 }
 
-// SetHeader sets a response header.
+// GetHeaderValues returns all values of a header (case-insensitive).
+func (r *Response) GetHeaderValues(key string) []string {
+	return DecodeHeaders(r.Headers).Values(key)
+}
+
+// SetHeader sets a response header, replacing any existing values.
 func (r *Response) SetHeader(key, value string) {
-	var headers map[string]string
-	if r.Headers == "" || r.Headers == "{}" {
-		headers = make(map[string]string)
-	} else {
-		if err := json.Unmarshal([]byte(r.Headers), &headers); err != nil {
-			headers = make(map[string]string)
-		}
-	}
-	headers[key] = value
-	data, _ := json.Marshal(headers)
-	r.Headers = string(data)
+	h := DecodeHeaders(r.Headers)
+	h.Set(key, value)
+	r.Headers = EncodeHeaders(h)
 }
 
-// GetHeaders returns all headers as a map.
+// AddHeader appends a response header value, preserving existing values.
+func (r *Response) AddHeader(key, value string) {
+	h := DecodeHeaders(r.Headers)
+	h.Add(key, value)
+	r.Headers = EncodeHeaders(h)
+}
+
+// GetHeaders returns all headers as a flat map (first value wins for
+// multi-valued headers). Use HTTPHeaders for full multi-value access.
 func (r *Response) GetHeaders() map[string]string {
-	if r.Headers == "" || r.Headers == "{}" {
-		return make(map[string]string)
-	}
-	var headers map[string]string
-	if err := json.Unmarshal([]byte(r.Headers), &headers); err != nil {
-		return make(map[string]string)
+	h := DecodeHeaders(r.Headers)
+	headers := make(map[string]string, len(h))
+	for k, v := range h {
+		if len(v) > 0 {
+			headers[k] = v[0]
+		}
 	}
 	return headers
 }
 
+// HTTPHeaders returns all headers as an http.Header.
+func (r *Response) HTTPHeaders() http.Header {
+	return DecodeHeaders(r.Headers)
+}
+
 // SetHeaders sets all headers from a map.
 func (r *Response) SetHeaders(headers map[string]string) {
-	data, _ := json.Marshal(headers)
-	r.Headers = string(data)
+	h := make(http.Header, len(headers))
+	for k, v := range headers {
+		h.Set(k, v)
+	}
+	r.Headers = EncodeHeaders(h)
+}
+
+// SetHTTPHeaders sets all headers from an http.Header, preserving
+// multi-valued headers such as Set-Cookie.
+func (r *Response) SetHTTPHeaders(h http.Header) {
+	r.Headers = EncodeHeaders(h)
 }
 
 // BodyString returns the body as a string.

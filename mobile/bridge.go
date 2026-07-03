@@ -21,6 +21,7 @@ var (
 type Bridge struct {
 	adapter *adapter.HTTPAdapter
 	wsHub   *websocket.Hub
+	jar     *cookieJar
 	mu      sync.RWMutex
 }
 
@@ -44,12 +45,17 @@ var nativeCallback NativeCallback
 func Initialize() {
 	bridgeMu.Lock()
 	defer bridgeMu.Unlock()
+	ensureBridgeLocked()
+}
 
+func ensureBridgeLocked() *Bridge {
 	if globalBridge == nil {
 		globalBridge = &Bridge{
 			wsHub: websocket.NewHub(),
+			jar:   newCookieJar(),
 		}
 	}
+	return globalBridge
 }
 
 // SetHandler sets the HTTP handler for the bridge.
@@ -57,13 +63,30 @@ func Initialize() {
 func SetHandler(handler http.Handler) {
 	bridgeMu.Lock()
 	defer bridgeMu.Unlock()
+	ensureBridgeLocked().adapter = adapter.NewHTTPAdapter(handler)
+}
 
-	if globalBridge == nil {
-		globalBridge = &Bridge{
-			wsHub: websocket.NewHub(),
-		}
+// SetStateDir enables on-disk persistence for bridge state (currently the
+// cookie jar, so login sessions survive app restarts). Native code should
+// call this at startup with an app-private writable directory:
+//   - iOS: Application Support or Documents directory
+//   - Android: context.filesDir
+func SetStateDir(dir string) {
+	bridgeMu.Lock()
+	b := ensureBridgeLocked()
+	bridgeMu.Unlock()
+	b.jar.setFile(cookieFilePath(dir))
+}
+
+// ClearCookies removes all cookies, including persisted ones.
+// Useful for implementing logout.
+func ClearCookies() {
+	bridgeMu.RLock()
+	b := globalBridge
+	bridgeMu.RUnlock()
+	if b != nil && b.jar != nil {
+		b.jar.clear()
 	}
-	globalBridge.adapter = adapter.NewHTTPAdapter(handler)
 }
 
 // SetNativeCallback registers the native callback handler.
@@ -106,8 +129,22 @@ func HandleRequest(method, url, headers string, body []byte) *core.Response {
 		Headers: headers,
 		Body:    body,
 	}
+	b.injectCookies(req)
 
-	return b.adapter.HandleRequest(req)
+	resp := b.adapter.HandleRequest(req)
+	b.jar.setFromResponse(resp.HTTPHeaders())
+	return resp
+}
+
+// injectCookies adds the jar's cookies to the request. WebViews don't manage
+// cookies for custom schemes, so the Go side owns the cookie lifecycle.
+func (b *Bridge) injectCookies(req *core.Request) {
+	if b.jar == nil {
+		return
+	}
+	if cookie := b.jar.cookieHeader(req.Path()); cookie != "" {
+		req.AddHeader("Cookie", cookie)
+	}
 }
 
 // HandleRequestSimple is a simplified version for basic requests.
@@ -140,6 +177,9 @@ func Shutdown() {
 	if globalBridge != nil {
 		if globalBridge.wsHub != nil {
 			globalBridge.wsHub.Close()
+		}
+		if globalBridge.jar != nil {
+			globalBridge.jar.save()
 		}
 		globalBridge = nil
 	}

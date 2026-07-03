@@ -3,17 +3,20 @@
 package core
 
 import (
-	"encoding/json"
+	"net/http"
 	"net/url"
 	"strings"
 )
 
 // Request represents an HTTP-like request from the mobile bridge.
 // All fields use gomobile-compatible types.
+//
+// Headers is a JSON object. Each value may be either a string (the common
+// case) or an array of strings for multi-valued headers such as Cookie.
 type Request struct {
 	Method  string // HTTP method: GET, POST, PUT, DELETE, PATCH
 	URL     string // Full URL path with query string, e.g., "/tasks?filter=active"
-	Headers string // JSON-encoded map[string]string for headers
+	Headers string // JSON-encoded headers: string or []string values
 	Body    []byte // Request body (form data, JSON, etc.)
 }
 
@@ -26,49 +29,61 @@ func NewRequest(method, url string) *Request {
 	}
 }
 
-// GetHeader returns the value of a header by key.
+// GetHeader returns the value of a header by key (case-insensitive).
+// For multi-valued headers, the first value is returned.
 func (r *Request) GetHeader(key string) string {
-	if r.Headers == "" || r.Headers == "{}" {
-		return ""
-	}
-	var headers map[string]string
-	if err := json.Unmarshal([]byte(r.Headers), &headers); err != nil {
-		return ""
-	}
-	return headers[key]
+	return DecodeHeaders(r.Headers).Get(key)
 }
 
-// SetHeader sets a header value. Creates headers JSON if needed.
+// GetHeaderValues returns all values of a header by key (case-insensitive).
+func (r *Request) GetHeaderValues(key string) []string {
+	return DecodeHeaders(r.Headers).Values(key)
+}
+
+// SetHeader sets a header value, replacing any existing values.
 func (r *Request) SetHeader(key, value string) {
-	var headers map[string]string
-	if r.Headers == "" || r.Headers == "{}" {
-		headers = make(map[string]string)
-	} else {
-		if err := json.Unmarshal([]byte(r.Headers), &headers); err != nil {
-			headers = make(map[string]string)
-		}
-	}
-	headers[key] = value
-	data, _ := json.Marshal(headers)
-	r.Headers = string(data)
+	h := DecodeHeaders(r.Headers)
+	h.Set(key, value)
+	r.Headers = EncodeHeaders(h)
 }
 
-// GetHeaders returns all headers as a map.
+// AddHeader appends a header value, preserving existing values.
+func (r *Request) AddHeader(key, value string) {
+	h := DecodeHeaders(r.Headers)
+	h.Add(key, value)
+	r.Headers = EncodeHeaders(h)
+}
+
+// GetHeaders returns all headers as a flat map (first value wins for
+// multi-valued headers). Use HTTPHeaders for full multi-value access.
 func (r *Request) GetHeaders() map[string]string {
-	if r.Headers == "" || r.Headers == "{}" {
-		return make(map[string]string)
-	}
-	var headers map[string]string
-	if err := json.Unmarshal([]byte(r.Headers), &headers); err != nil {
-		return make(map[string]string)
+	h := DecodeHeaders(r.Headers)
+	headers := make(map[string]string, len(h))
+	for k, v := range h {
+		if len(v) > 0 {
+			headers[k] = v[0]
+		}
 	}
 	return headers
 }
 
+// HTTPHeaders returns all headers as an http.Header.
+func (r *Request) HTTPHeaders() http.Header {
+	return DecodeHeaders(r.Headers)
+}
+
 // SetHeaders sets all headers from a map.
 func (r *Request) SetHeaders(headers map[string]string) {
-	data, _ := json.Marshal(headers)
-	r.Headers = string(data)
+	h := make(http.Header, len(headers))
+	for k, v := range headers {
+		h.Set(k, v)
+	}
+	r.Headers = EncodeHeaders(h)
+}
+
+// SetHTTPHeaders sets all headers from an http.Header.
+func (r *Request) SetHTTPHeaders(h http.Header) {
+	r.Headers = EncodeHeaders(h)
 }
 
 // Path returns the URL path without query string.
