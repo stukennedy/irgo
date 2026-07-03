@@ -273,7 +273,7 @@ Mobile production features (wired automatically by the iOS/Android shells):
 
 - **Streaming SSE**: Datastar handlers stream progressively through the
   bridge (`mobile.HandleRequestStream`). Long-lived SSE handlers work, and
-  `sse.IsClosed()`/`ctx.Done()` fire when the WebView cancels the request.
+  `sse.IsClosed()`/`ctx.Context().Done()` fire when the WebView cancels the request.
 - **Cookies/sessions**: the bridge keeps a cookie jar (WebViews don't manage
   cookies for custom schemes). Native shells call `mobile.SetStateDir(dir)`
   at startup so cookies persist across app restarts. `mobile.ClearCookies()`
@@ -821,7 +821,7 @@ When building:
 // go.mod
 require (
     github.com/a-h/templ v0.3.977
-    github.com/stukennedy/irgo v0.1.0
+    github.com/stukennedy/irgo v0.4.0
     github.com/starfederation/datastar-go v1.1.0
 )
 ```

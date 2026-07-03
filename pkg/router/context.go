@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -21,6 +22,13 @@ func NewContext(w http.ResponseWriter, r *http.Request) *Context {
 		Request:  r,
 		Response: w,
 	}
+}
+
+// Context returns the request's context. It is cancelled when the client
+// disconnects (including WebView cancellation on mobile), so pass it to
+// native.Call, database queries, and long-lived work.
+func (c *Context) Context() context.Context {
+	return c.Request.Context()
 }
 
 // Param returns a URL path parameter extracted by chi router.
