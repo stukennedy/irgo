@@ -31,7 +31,9 @@ func TestGoWorkFileValid(t *testing.T) {
 		if err := os.MkdirAll(p, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(p, "go.mod"), []byte("module "+name+"\n"), 0o644); err != nil {
+		// A fixed valid module path: directory names like "rel mod" are not
+		// legal module paths, and isModuleDir now does a strict parse.
+		if err := os.WriteFile(filepath.Join(p, "go.mod"), []byte("module example.com/testmod\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		return p
@@ -126,6 +128,22 @@ func TestGoWorkFileValid(t *testing.T) {
 		path := write(fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n)\n", trunc))
 		if goWorkFileValid(path) {
 			t.Fatal("expected invalid go.work (use target go.mod has no module directive)")
+		}
+	})
+
+	t.Run("go.mod with valid module line but malformed body is invalid", func(t *testing.T) {
+		// modfile.ModulePath would accept this; Go's loader does not.
+		corrupt := filepath.Join(dir, "corrupt-mod")
+		if err := os.MkdirAll(corrupt, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(corrupt, "go.mod"),
+			[]byte("module example.com/corrupt\n\nrequire (\n\texample.com/dep"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		path := write(fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n)\n", corrupt))
+		if goWorkFileValid(path) {
+			t.Fatal("expected invalid go.work (use target go.mod fails a full parse)")
 		}
 	})
 

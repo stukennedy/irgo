@@ -494,7 +494,14 @@ func goWorkIrgoGenerated(path string) bool {
 // would reject just the same.
 func isModuleDir(dir string) bool {
 	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
-	return err == nil && modfile.ModulePath(data) != ""
+	if err != nil {
+		return false
+	}
+	// Full strict parse: modfile.ModulePath tolerates errors elsewhere in
+	// the file by contract, but Go itself does not — a valid module line
+	// above a truncated require block still fails to load.
+	f, err := modfile.Parse("go.mod", data, nil)
+	return err == nil && f.Module != nil && f.Module.Mod.Path != ""
 }
 
 // isIrgoCheckout reports whether dir is a checkout of the irgo framework
