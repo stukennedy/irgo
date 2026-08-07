@@ -78,10 +78,17 @@ mobile: ios android js
 # Sync the canonical native shells into the CLI scaffolding templates.
 # ios/Irgo and android/app are the single source of truth; run this after
 # editing them so `irgo new` scaffolds current code.
-# (IrgoWebViewController.swift is excluded: the template variant adds
-# dev-mode support and is maintained by hand.)
-ANDROID_SHELL_FILES = IrgoActivity IrgoBridge IrgoJSInterface IrgoNative IrgoPlugins IrgoWebViewClient
-IOS_SHELL_FILES = IrgoBridge IrgoSchemeHandler IrgoWebSocketBridge IrgoNative IrgoPlugins
+# Intentionally excluded from sync:
+#  - IrgoWebViewController.swift: the template variant adds dev-mode support
+#    and is maintained by hand.
+#  - IrgoBridge.kt / IrgoBridge.swift: the framework repo binds irgo/mobile
+#    directly (responses are core.Response / CoreResponse), while scaffolded
+#    projects bind their own mobile wrapper with a local Response type
+#    (mobile.Response / MobileResponse) — gobind drops functions whose
+#    signatures reference types from a dependency module, so the scaffold
+#    cannot reuse core.Response. The two variants are maintained by hand.
+ANDROID_SHELL_FILES = IrgoActivity IrgoJSInterface IrgoNative IrgoPlugins IrgoWebViewClient
+IOS_SHELL_FILES = IrgoSchemeHandler IrgoWebSocketBridge IrgoNative IrgoPlugins
 
 sync-templates:
 	@for f in $(ANDROID_SHELL_FILES); do \

@@ -29,13 +29,16 @@ public class IrgoWebSocketBridge: NSObject {
     /// - Returns: Session ID
     public func connect(url: String) throws -> String {
         var error: NSError?
+        // MobileWebSocketConnect returns a non-optional String (gomobile
+        // generates `NSString* _Nonnull` + explicit error pointer), so there
+        // is nothing to conditionally bind — just reject empty sessions.
         let sessionID = MobileWebSocketConnect(url, &error)
 
         if let error = error {
             throw error
         }
 
-        guard let sessionID = sessionID, !sessionID.isEmpty else {
+        guard !sessionID.isEmpty else {
             throw IrgoError.bridgeNotInitialized
         }
 
@@ -63,9 +66,11 @@ public class IrgoWebSocketBridge: NSObject {
 
     /// Close a virtual WebSocket connection
     public func close(sessionID: String) {
-        do {
-            try MobileWebSocketClose(sessionID)
-        } catch {
+        var error: NSError?
+        // MobileWebSocketClose takes an explicit error pointer (gomobile
+        // generates `BOOL ... (sessionID, NSError** error)`).
+        MobileWebSocketClose(sessionID, &error)
+        if let error = error {
             print("Irgo: error closing WebSocket: \(error)")
         }
         lock.lock()
