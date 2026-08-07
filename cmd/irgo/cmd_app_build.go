@@ -139,6 +139,18 @@ func ensureMobileBuildSetup() error {
 	// not the floor a generated project declares.
 	goVersion := runningGoVersion()
 
+	// An existing go.work can be stale: it references the temp x/mobile clone
+	// (os.TempDir()/golang-mobile) that macOS may clean up between sessions. A
+	// stale go.work breaks every `go` command with "use ...: directory does not
+	// exist", and irgo previously never validated it — users had to delete it
+	// by hand. Validate now; if any referenced dir is gone, drop the file (and
+	// go.work.sum) so it is regenerated below.
+	if _, err := os.Stat("go.work"); err == nil && !goWorkFileValid("go.work") {
+		fmt.Println("go.work references missing directories — regenerating")
+		os.Remove("go.work")
+		os.Remove("go.work.sum")
+	}
+
 	// Check if go.work exists with x/mobile
 	if _, err := os.Stat("go.work"); os.IsNotExist(err) {
 		// Get irgo path for replacement
@@ -327,4 +339,29 @@ func sameDir(a, b string) bool {
 	ra, err1 := filepath.EvalSymlinks(aa)
 	rb, err2 := filepath.EvalSymlinks(bb)
 	return err1 == nil && err2 == nil && ra == rb
+}
+
+// goWorkFileValid reports whether every directory referenced by a go.work
+// file still exists. A stale file (e.g. a cleaned-up temp x/mobile clone) is
+// invalid so ensureMobileBuildSetup can regenerate it.
+func goWorkFileValid(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	inUse := false
+	for _, line := range splitLines(string(data)) {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "use ("):
+			inUse = true
+		case trimmed == ")":
+			inUse = false
+		case inUse && trimmed != "" && trimmed != ".":
+			if _, err := os.Stat(trimmed); os.IsNotExist(err) {
+				return false
+			}
+		}
+	}
+	return true
 }
