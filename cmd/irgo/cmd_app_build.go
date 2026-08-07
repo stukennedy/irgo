@@ -473,6 +473,14 @@ func goWorkIrgoGenerated(path string) bool {
 				continue
 			}
 		}
+		// Legacy files only: the entry may be an irgo checkout recorded by
+		// a previous CLI whose getIrgoPath() no longer discovers it (e.g.
+		// after switching from a locally built CLI to an installed one).
+		// Its go.mod module declaration is the provenance — the same test
+		// getIrgoPath itself uses.
+		if isIrgoCheckout(abs) {
+			continue
+		}
 		return false
 	}
 	return true
@@ -485,4 +493,12 @@ func goWorkIrgoGenerated(path string) bool {
 func isModuleDir(dir string) bool {
 	info, err := os.Stat(filepath.Join(dir, "go.mod"))
 	return err == nil && info.Mode().IsRegular()
+}
+
+// isIrgoCheckout reports whether dir is a checkout of the irgo framework
+// itself, identified by its go.mod module declaration — the same test
+// getIrgoPath uses to discover local checkouts.
+func isIrgoCheckout(dir string) bool {
+	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	return err == nil && strings.Contains(string(data), "module github.com/stukennedy/irgo")
 }

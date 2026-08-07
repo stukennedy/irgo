@@ -285,3 +285,46 @@ func TestGoWorkFileValidUseTargetIsFile(t *testing.T) {
 		t.Fatal("expected invalid go.work (use target is a file, ENOTDIR)")
 	}
 }
+
+// A legacy go.work may reference an irgo checkout discovered by a previous
+// CLI that the current getIrgoPath() no longer finds; its go.mod module
+// declaration identifies it as irgo's own member (review round 8).
+func TestGoWorkIrgoGeneratedLegacyIrgoCheckout(t *testing.T) {
+	dir := t.TempDir()
+
+	checkout := filepath.Join(dir, "some-old-irgo-checkout")
+	if err := os.MkdirAll(checkout, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(checkout, "go.mod"),
+		[]byte("module github.com/stukennedy/irgo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	path := filepath.Join(dir, "go.work")
+	content := fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n)\n", checkout)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if !goWorkIrgoGenerated(path) {
+		t.Fatal("expected legacy irgo checkout entry to be recognized as irgo's own")
+	}
+
+	// A live checkout of some other module stays customized.
+	other := filepath.Join(dir, "other-module")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(other, "go.mod"),
+		[]byte("module example.com/other\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	content = fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n)\n", other)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if goWorkIrgoGenerated(path) {
+		t.Fatal("expected non-irgo module entry to mark the file customized")
+	}
+}
