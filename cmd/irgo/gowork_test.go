@@ -24,15 +24,27 @@ func TestGoWorkFileValid(t *testing.T) {
 		return path
 	}
 
+	// A go.work use target must be a module directory, so test fixtures
+	// need a go.mod, not just a directory.
+	mkmod := func(name string) string {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(p, "go.mod"), []byte("module "+name+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	// The go.work fixtures reference "." — make dir itself a module.
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module root\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	t.Run("all referenced dirs exist", func(t *testing.T) {
-		a := filepath.Join(dir, "mod-a")
-		b := filepath.Join(dir, "mod-b")
-		if err := os.MkdirAll(a, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.MkdirAll(b, 0o755); err != nil {
-			t.Fatal(err)
-		}
+		a := mkmod("mod-a")
+		b := mkmod("mod-b")
 		path := write(fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n\t%s\n)\n", a, b))
 		if !goWorkFileValid(path) {
 			t.Fatal("expected valid go.work (all dirs exist)")
@@ -40,10 +52,7 @@ func TestGoWorkFileValid(t *testing.T) {
 	})
 
 	t.Run("missing referenced dir", func(t *testing.T) {
-		a := filepath.Join(dir, "mod-a")
-		if err := os.MkdirAll(a, 0o755); err != nil {
-			t.Fatal(err)
-		}
+		a := mkmod("mod-a")
 		missing := filepath.Join(dir, "does-not-exist")
 		path := write(fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n\t%s\n)\n", a, missing))
 		if goWorkFileValid(path) {
@@ -67,10 +76,7 @@ func TestGoWorkFileValid(t *testing.T) {
 	// Real work files use forms a naive line-splitter misreads; none of
 	// these may cause a valid workspace to be treated as stale (and deleted).
 	t.Run("inline comment in use block", func(t *testing.T) {
-		a := filepath.Join(dir, "mod-comment")
-		if err := os.MkdirAll(a, 0o755); err != nil {
-			t.Fatal(err)
-		}
+		a := mkmod("mod-comment")
 		path := write(fmt.Sprintf("go 1.24\n\nuse (\n\t. // root module\n\t%s // temp clone\n)\n", a))
 		if !goWorkFileValid(path) {
 			t.Fatal("expected valid go.work (inline comments must not read as paths)")
@@ -78,10 +84,7 @@ func TestGoWorkFileValid(t *testing.T) {
 	})
 
 	t.Run("single-line use directive", func(t *testing.T) {
-		a := filepath.Join(dir, "mod-single")
-		if err := os.MkdirAll(a, 0o755); err != nil {
-			t.Fatal(err)
-		}
+		a := mkmod("mod-single")
 		path := write(fmt.Sprintf("go 1.24\n\nuse %s\n", a))
 		if !goWorkFileValid(path) {
 			t.Fatal("expected valid go.work (single-line use)")
@@ -89,12 +92,24 @@ func TestGoWorkFileValid(t *testing.T) {
 	})
 
 	t.Run("quoted relative path resolves against go.work dir", func(t *testing.T) {
-		if err := os.MkdirAll(filepath.Join(dir, "rel mod"), 0o755); err != nil {
-			t.Fatal(err)
-		}
+		mkmod("rel mod")
 		path := write("go 1.24\n\nuse \"./rel mod\"\n")
 		if !goWorkFileValid(path) {
 			t.Fatal("expected valid go.work (quoted relative path)")
+		}
+	})
+
+	t.Run("existing dir without go.mod is invalid", func(t *testing.T) {
+		// A partial x/mobile clone (process killed between MkdirAll and
+		// checkout) exists on disk but is not a module — Go cannot load it,
+		// so the workspace must count as stale.
+		partial := filepath.Join(dir, "partial-clone")
+		if err := os.MkdirAll(partial, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		path := write(fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n)\n", partial))
+		if goWorkFileValid(path) {
+			t.Fatal("expected invalid go.work (use target has no go.mod)")
 		}
 	})
 

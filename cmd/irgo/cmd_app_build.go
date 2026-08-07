@@ -162,8 +162,17 @@ func ensureMobileBuildSetup() error {
 		// Get irgo path for replacement
 		irgoPath := getIrgoPath()
 
-		// Clone x/mobile if not already present
+		// Clone x/mobile if not already present. "Present" means a usable
+		// module: a partial clone (process killed between MkdirAll and
+		// checkout) must be removed and re-cloned, or the regenerated
+		// go.work would point at a directory Go still cannot load.
 		mobileDir := filepath.Join(os.TempDir(), "golang-mobile")
+		if _, err := os.Stat(filepath.Join(mobileDir, "go.mod")); os.IsNotExist(err) {
+			if _, statErr := os.Stat(mobileDir); statErr == nil {
+				fmt.Println("Removing partial x/mobile clone...")
+				os.RemoveAll(mobileDir)
+			}
+		}
 		if _, err := os.Stat(mobileDir); os.IsNotExist(err) {
 			fmt.Println("Cloning golang.org/x/mobile...")
 			// Pinned to a commit. `git clone --depth 1` with no ref tracks
@@ -372,7 +381,11 @@ func goWorkFileValid(path string) bool {
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(dir, p)
 		}
-		if _, err := os.Stat(p); os.IsNotExist(err) {
+		// A use target must be a module, not merely an existing directory
+		// (`go work use` semantics). A bare existence check would pass a
+		// partial x/mobile clone — e.g. a process killed between MkdirAll
+		// and checkout — and the workspace would stay broken.
+		if _, err := os.Stat(filepath.Join(p, "go.mod")); os.IsNotExist(err) {
 			return false
 		}
 	}
