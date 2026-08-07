@@ -274,13 +274,33 @@ func TestGoWorkGeneratedMarker(t *testing.T) {
 		return path
 	}
 
-	t.Run("marked file with custom use entry is protected", func(t *testing.T) {
+	t.Run("marked file with live custom use entry is protected", func(t *testing.T) {
 		// go work edit preserves comments, so a developer can customize a
 		// generated workspace without ever removing the marker (round 14).
+		live := filepath.Join(dir, "live-custom")
+		if err := os.MkdirAll(live, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(live, "go.mod"),
+			[]byte("module example.com/live\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		path := write("marked.work", goWorkGeneratedMarker+
-			"\n\ngo 1.24\n\nuse (\n\t.\n\t../some-custom-module\n)\n")
+			fmt.Sprintf("\n\ngo 1.24\n\nuse (\n\t.\n\t%s\n)\n", live))
 		if goWorkIrgoGenerated(path) {
 			t.Fatal("expected customized marked go.work to be protected")
+		}
+	})
+
+	t.Run("marked file with vanished member is regenerable", func(t *testing.T) {
+		// A marked workspace whose generated irgo checkout was deleted must
+		// self-heal (round 18): the vanished entry is a dangling reference,
+		// so regeneration loses nothing recoverable.
+		gone := filepath.Join(dir, "deleted-checkout")
+		path := write("markedgone.work", goWorkGeneratedMarker+
+			fmt.Sprintf("\n\ngo 1.24\n\nuse (\n\t.\n\t%s\n)\n", gone))
+		if !goWorkIrgoGenerated(path) {
+			t.Fatal("expected marked go.work with vanished member to be regenerable")
 		}
 	})
 

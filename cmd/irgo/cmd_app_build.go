@@ -482,6 +482,16 @@ func goWorkIrgoGenerated(path string) bool {
 		if known[p] || known[abs] {
 			continue
 		}
+		// Marked files: irgo wrote the membership, so a vanished entry is
+		// one of its generated members (typically a deleted local irgo
+		// checkout). Even if a customization pointed there, regeneration
+		// loses only a dangling reference to a path that no longer exists.
+		// Live unknown entries still mean customization and stay protected.
+		if marked {
+			if _, err := os.Stat(abs); os.IsNotExist(err) {
+				continue
+			}
+		}
 		// Legacy files only (no marker): a go.work generated under an
 		// earlier TMPDIR references that session's golang-mobile clone, not
 		// the current os.TempDir()'s — exactly the macOS scenario this
