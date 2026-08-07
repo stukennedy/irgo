@@ -260,3 +260,28 @@ func TestGoWorkGeneratedMarker(t *testing.T) {
 		}
 	})
 }
+
+// A use path replaced by a regular file makes Stat(go.mod) fail with
+// ENOTDIR — not ENOENT — and the module is just as unloadable. The
+// workspace must count as stale (review round 7).
+func TestGoWorkFileValidUseTargetIsFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module root\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	notADir := filepath.Join(dir, "was-a-module")
+	if err := os.WriteFile(notADir, []byte("just a file"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	path := filepath.Join(dir, "go.work")
+	content := fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n)\n", notADir)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if goWorkFileValid(path) {
+		t.Fatal("expected invalid go.work (use target is a file, ENOTDIR)")
+	}
+}

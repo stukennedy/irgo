@@ -175,7 +175,7 @@ func ensureMobileBuildSetup() error {
 		// checkout) must be removed and re-cloned, or the regenerated
 		// go.work would point at a directory Go still cannot load.
 		mobileDir := filepath.Join(os.TempDir(), "golang-mobile")
-		if _, err := os.Stat(filepath.Join(mobileDir, "go.mod")); os.IsNotExist(err) {
+		if !isModuleDir(mobileDir) {
 			if _, statErr := os.Stat(mobileDir); statErr == nil {
 				fmt.Println("Removing partial x/mobile clone...")
 				os.RemoveAll(mobileDir)
@@ -392,8 +392,11 @@ func goWorkFileValid(path string) bool {
 		// A use target must be a module, not merely an existing directory
 		// (`go work use` semantics). A bare existence check would pass a
 		// partial x/mobile clone — e.g. a process killed between MkdirAll
-		// and checkout — and the workspace would stay broken.
-		if _, err := os.Stat(filepath.Join(p, "go.mod")); os.IsNotExist(err) {
+		// and checkout — and the workspace would stay broken. Any stat
+		// error counts: ENOTDIR (path replaced by a file) and EACCES leave
+		// the module just as unloadable as ENOENT, and go.mod must be a
+		// regular file.
+		if !isModuleDir(p) {
 			return false
 		}
 	}
@@ -473,4 +476,13 @@ func goWorkIrgoGenerated(path string) bool {
 		return false
 	}
 	return true
+}
+
+// isModuleDir reports whether dir contains a loadable module: a regular
+// go.mod file that can actually be statted. Any stat failure (ENOENT,
+// ENOTDIR when the path was replaced by a file, EACCES) leaves the module
+// unloadable for Go, so all of them count as "not a module".
+func isModuleDir(dir string) bool {
+	info, err := os.Stat(filepath.Join(dir, "go.mod"))
+	return err == nil && info.Mode().IsRegular()
 }
