@@ -486,13 +486,15 @@ func goWorkIrgoGenerated(path string) bool {
 	return true
 }
 
-// isModuleDir reports whether dir contains a loadable module: a regular
-// go.mod file that can actually be statted. Any stat failure (ENOENT,
-// ENOTDIR when the path was replaced by a file, EACCES) leaves the module
-// unloadable for Go, so all of them count as "not a module".
+// isModuleDir reports whether dir contains a loadable module: a readable
+// go.mod declaring a valid module path. Reading covers every unusable shape
+// in one test — missing file (ENOENT), dir-in-place-of-file (EISDIR), path
+// replaced by a file (ENOTDIR), unreadable (EACCES) — and parsing catches a
+// truncated or malformed go.mod left by an interrupted checkout, which Go
+// would reject just the same.
 func isModuleDir(dir string) bool {
-	info, err := os.Stat(filepath.Join(dir, "go.mod"))
-	return err == nil && info.Mode().IsRegular()
+	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	return err == nil && modfile.ModulePath(data) != ""
 }
 
 // isIrgoCheckout reports whether dir is a checkout of the irgo framework

@@ -113,6 +113,22 @@ func TestGoWorkFileValid(t *testing.T) {
 		}
 	})
 
+	t.Run("truncated go.mod in use target is invalid", func(t *testing.T) {
+		// An interrupted checkout can leave a regular but malformed go.mod
+		// (no module directive); Go rejects it, so the workspace is stale.
+		trunc := filepath.Join(dir, "truncated-mod")
+		if err := os.MkdirAll(trunc, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(trunc, "go.mod"), []byte("modu"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		path := write(fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n)\n", trunc))
+		if goWorkFileValid(path) {
+			t.Fatal("expected invalid go.work (use target go.mod has no module directive)")
+		}
+	})
+
 	t.Run("unparseable file is invalid", func(t *testing.T) {
 		path := write("use (\n\tnever closed\n")
 		if goWorkFileValid(path) {
