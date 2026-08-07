@@ -186,7 +186,12 @@ func ensureMobileBuildSetup() error {
 		if !isModuleDir(mobileDir) {
 			if _, statErr := os.Stat(mobileDir); statErr == nil {
 				fmt.Println("Removing partial x/mobile clone...")
-				os.RemoveAll(mobileDir)
+				// A failed removal must be fatal: the existence check below
+				// would see the directory, skip the clone, and write a
+				// workspace referencing a module Go cannot load.
+				if err := os.RemoveAll(mobileDir); err != nil {
+					return fmt.Errorf("removing partial x/mobile clone: %w", err)
+				}
 			}
 		}
 		if _, err := os.Stat(mobileDir); os.IsNotExist(err) {
@@ -456,12 +461,14 @@ func goWorkIrgoGenerated(path string) bool {
 		return false
 	}
 
+	// The discovered irgo checkout is deliberately NOT allowlisted here:
+	// getIrgoPath's discovery uses a tolerant substring test, so its result
+	// must not authorize deletion. Live irgo checkouts are recognized in
+	// the loop below via isIrgoCheckout's strict exact-path parse instead,
+	// which covers the discovered checkout and any previous one alike.
 	known := map[string]bool{
 		filepath.Clean("."):                          true,
 		filepath.Join(os.TempDir(), "golang-mobile"): true,
-	}
-	if irgoPath := getIrgoPath(); irgoPath != "" {
-		known[filepath.Clean(irgoPath)] = true
 	}
 
 	dir := filepath.Dir(path)
