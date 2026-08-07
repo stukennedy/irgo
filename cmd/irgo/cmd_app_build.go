@@ -496,9 +496,11 @@ func isModuleDir(dir string) bool {
 }
 
 // isIrgoCheckout reports whether dir is a checkout of the irgo framework
-// itself, identified by its go.mod module declaration — the same test
-// getIrgoPath uses to discover local checkouts.
+// itself, identified by its go.mod module declaration. The path is parsed
+// and matched exactly — a substring test would also accept e.g.
+// github.com/stukennedy/irgo-tools, or the path appearing in a comment,
+// and this result gates a destructive regeneration.
 func isIrgoCheckout(dir string) bool {
 	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
-	return err == nil && strings.Contains(string(data), "module github.com/stukennedy/irgo")
+	return err == nil && modfile.ModulePath(data) == "github.com/stukennedy/irgo"
 }

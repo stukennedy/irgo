@@ -311,6 +311,24 @@ func TestGoWorkIrgoGeneratedLegacyIrgoCheckout(t *testing.T) {
 		t.Fatal("expected legacy irgo checkout entry to be recognized as irgo's own")
 	}
 
+	// A module whose path merely contains the irgo path as a prefix must
+	// not count as provenance (round 9: exact match, not substring).
+	tools := filepath.Join(dir, "irgo-tools")
+	if err := os.MkdirAll(tools, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tools, "go.mod"),
+		[]byte("module github.com/stukennedy/irgo-tools\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	content = fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n)\n", tools)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if goWorkIrgoGenerated(path) {
+		t.Fatal("expected prefix-matching module path to mark the file customized")
+	}
+
 	// A live checkout of some other module stays customized.
 	other := filepath.Join(dir, "other-module")
 	if err := os.MkdirAll(other, 0o755); err != nil {
