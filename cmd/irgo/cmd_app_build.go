@@ -447,6 +447,11 @@ func goWorkIrgoGenerated(path string) bool {
 	// only the content can say nobody added to it since.
 	// toolchain and godebug are workspace settings irgo never writes —
 	// their presence means a developer configured this file by hand.
+	// The go directive is deliberately NOT a customization signal: irgo
+	// owns it by design (the workspace tracks the running toolchain and
+	// the x/mobile clone's go.mod is rewritten to match), every generated
+	// file has one, and the toolchain routinely changes between sessions —
+	// so its value cannot distinguish a user edit from normal drift.
 	if len(wf.Replace) > 0 || wf.Toolchain != nil || len(wf.Godebug) > 0 {
 		return false
 	}
