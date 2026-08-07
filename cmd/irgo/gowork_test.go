@@ -63,4 +63,45 @@ func TestGoWorkFileValid(t *testing.T) {
 			t.Fatal("expected invalid (file does not exist)")
 		}
 	})
+
+	// Real work files use forms a naive line-splitter misreads; none of
+	// these may cause a valid workspace to be treated as stale (and deleted).
+	t.Run("inline comment in use block", func(t *testing.T) {
+		a := filepath.Join(dir, "mod-comment")
+		if err := os.MkdirAll(a, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		path := write(fmt.Sprintf("go 1.24\n\nuse (\n\t. // root module\n\t%s // temp clone\n)\n", a))
+		if !goWorkFileValid(path) {
+			t.Fatal("expected valid go.work (inline comments must not read as paths)")
+		}
+	})
+
+	t.Run("single-line use directive", func(t *testing.T) {
+		a := filepath.Join(dir, "mod-single")
+		if err := os.MkdirAll(a, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		path := write(fmt.Sprintf("go 1.24\n\nuse %s\n", a))
+		if !goWorkFileValid(path) {
+			t.Fatal("expected valid go.work (single-line use)")
+		}
+	})
+
+	t.Run("quoted relative path resolves against go.work dir", func(t *testing.T) {
+		if err := os.MkdirAll(filepath.Join(dir, "rel mod"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		path := write("go 1.24\n\nuse \"./rel mod\"\n")
+		if !goWorkFileValid(path) {
+			t.Fatal("expected valid go.work (quoted relative path)")
+		}
+	})
+
+	t.Run("unparseable file is invalid", func(t *testing.T) {
+		path := write("use (\n\tnever closed\n")
+		if goWorkFileValid(path) {
+			t.Fatal("expected invalid go.work (unparseable)")
+		}
+	})
 }

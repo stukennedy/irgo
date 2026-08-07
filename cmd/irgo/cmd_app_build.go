@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"golang.org/x/mod/modfile"
 )
 
 // runBuild builds for mobile platforms. sim additionally builds the runnable
@@ -132,24 +134,28 @@ func ensureGobindTool() error {
 }
 
 func ensureMobileBuildSetup() error {
-	if err := ensureGobindTool(); err != nil {
-		return err
-	}
-	// The workspace and the vendored x/mobile follow this machine's toolchain,
-	// not the floor a generated project declares.
-	goVersion := runningGoVersion()
-
 	// An existing go.work can be stale: it references the temp x/mobile clone
 	// (os.TempDir()/golang-mobile) that macOS may clean up between sessions. A
 	// stale go.work breaks every `go` command with "use ...: directory does not
 	// exist", and irgo previously never validated it — users had to delete it
 	// by hand. Validate now; if any referenced dir is gone, drop the file (and
 	// go.work.sum) so it is regenerated below.
+	//
+	// This must run before ensureGobindTool: its `go get` loads the workspace
+	// and dies on the stale file, so validating afterwards would never repair
+	// exactly the legacy projects this exists for.
 	if _, err := os.Stat("go.work"); err == nil && !goWorkFileValid("go.work") {
 		fmt.Println("go.work references missing directories — regenerating")
 		os.Remove("go.work")
 		os.Remove("go.work.sum")
 	}
+
+	if err := ensureGobindTool(); err != nil {
+		return err
+	}
+	// The workspace and the vendored x/mobile follow this machine's toolchain,
+	// not the floor a generated project declares.
+	goVersion := runningGoVersion()
 
 	// Check if go.work exists with x/mobile
 	if _, err := os.Stat("go.work"); os.IsNotExist(err) {
@@ -344,23 +350,30 @@ func sameDir(a, b string) bool {
 // goWorkFileValid reports whether every directory referenced by a go.work
 // file still exists. A stale file (e.g. a cleaned-up temp x/mobile clone) is
 // invalid so ensureMobileBuildSetup can regenerate it.
+//
+// Uses Go's own work-file parser: hand-splitting lines would misread inline
+// comments (`. // root module`), quoted paths, and single-line `use`
+// directives as missing directories — and deleting a user's customized
+// workspace over a parse artifact is exactly the kind of damage this check
+// exists to prevent. An unparseable file is treated as invalid: `go` would
+// reject it anyway, so regenerating is the recovery.
 func goWorkFileValid(path string) bool {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return false
 	}
-	inUse := false
-	for _, line := range splitLines(string(data)) {
-		trimmed := strings.TrimSpace(line)
-		switch {
-		case strings.HasPrefix(trimmed, "use ("):
-			inUse = true
-		case trimmed == ")":
-			inUse = false
-		case inUse && trimmed != "" && trimmed != ".":
-			if _, err := os.Stat(trimmed); os.IsNotExist(err) {
-				return false
-			}
+	wf, err := modfile.ParseWork(path, data, nil)
+	if err != nil {
+		return false
+	}
+	dir := filepath.Dir(path)
+	for _, use := range wf.Use {
+		p := use.Path
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(dir, p)
+		}
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			return false
 		}
 	}
 	return true
