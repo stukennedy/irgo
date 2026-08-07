@@ -167,3 +167,52 @@ func TestGoWorkIrgoGenerated(t *testing.T) {
 		}
 	})
 }
+
+// Regression tests for the round-4 review findings: TMPDIR drift and
+// toolchain/godebug directives.
+func TestGoWorkIrgoGeneratedEdgeCases(t *testing.T) {
+	dir := t.TempDir()
+
+	write := func(name, content string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+		return path
+	}
+
+	t.Run("golang-mobile from an earlier TMPDIR is regenerable", func(t *testing.T) {
+		// The clone path of a previous session whose temp dir was cleaned:
+		// not the current os.TempDir(), and it no longer exists.
+		oldClone := filepath.Join(dir, "old-tmp", "golang-mobile")
+		path := write("oldtmp.work", fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n)\n", oldClone))
+		if !goWorkIrgoGenerated(path) {
+			t.Fatal("expected go.work referencing a vanished golang-mobile clone to be regenerable")
+		}
+	})
+
+	t.Run("existing custom golang-mobile dir marks it customized", func(t *testing.T) {
+		custom := filepath.Join(dir, "golang-mobile")
+		if err := os.MkdirAll(custom, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		path := write("livemobile.work", fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n)\n", custom))
+		if goWorkIrgoGenerated(path) {
+			t.Fatal("expected a live custom golang-mobile dir to mark the file customized")
+		}
+	})
+
+	t.Run("toolchain directive marks it customized", func(t *testing.T) {
+		path := write("toolchain.work", "go 1.24\n\ntoolchain go1.24.5\n\nuse .\n")
+		if goWorkIrgoGenerated(path) {
+			t.Fatal("expected toolchain directive to mark the file customized")
+		}
+	})
+
+	t.Run("godebug directive marks it customized", func(t *testing.T) {
+		path := write("godebug.work", "go 1.24\n\ngodebug default=go1.23\n\nuse .\n")
+		if goWorkIrgoGenerated(path) {
+			t.Fatal("expected godebug directive to mark the file customized")
+		}
+	})
+}

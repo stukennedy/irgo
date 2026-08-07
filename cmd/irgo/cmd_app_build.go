@@ -418,7 +418,9 @@ func goWorkIrgoGenerated(path string) bool {
 	if err != nil {
 		return true
 	}
-	if len(wf.Replace) > 0 {
+	// toolchain and godebug are workspace settings irgo never writes —
+	// their presence means a developer configured this file by hand.
+	if len(wf.Replace) > 0 || wf.Toolchain != nil || len(wf.Godebug) > 0 {
 		return false
 	}
 
@@ -433,13 +435,25 @@ func goWorkIrgoGenerated(path string) bool {
 	dir := filepath.Dir(path)
 	for _, use := range wf.Use {
 		p := filepath.Clean(use.Path)
-		if !known[p] {
+		abs := p
+		if !filepath.IsAbs(abs) {
 			// Relative entries resolve against the go.work directory.
-			if !filepath.IsAbs(p) && known[filepath.Join(dir, p)] {
+			abs = filepath.Join(dir, abs)
+		}
+		if known[p] || known[abs] {
+			continue
+		}
+		// A go.work generated under an earlier TMPDIR references that
+		// session's golang-mobile clone, not the current os.TempDir()'s —
+		// exactly the macOS scenario this repair exists for. Recognize such
+		// entries as irgo's own, but only when the directory is gone: a
+		// live directory named golang-mobile could be a real custom module.
+		if filepath.Base(p) == "golang-mobile" {
+			if _, err := os.Stat(abs); os.IsNotExist(err) {
 				continue
 			}
-			return false
 		}
+		return false
 	}
 	return true
 }
