@@ -274,11 +274,30 @@ func TestGoWorkGeneratedMarker(t *testing.T) {
 		return path
 	}
 
-	t.Run("marker makes any content regenerable", func(t *testing.T) {
+	t.Run("marked file with custom use entry is protected", func(t *testing.T) {
+		// go work edit preserves comments, so a developer can customize a
+		// generated workspace without ever removing the marker (round 14).
 		path := write("marked.work", goWorkGeneratedMarker+
 			"\n\ngo 1.24\n\nuse (\n\t.\n\t../some-custom-module\n)\n")
+		if goWorkIrgoGenerated(path) {
+			t.Fatal("expected customized marked go.work to be protected")
+		}
+	})
+
+	t.Run("marked file with replace directive is protected", func(t *testing.T) {
+		path := write("markedreplace.work", goWorkGeneratedMarker+
+			"\n\ngo 1.24\n\nuse .\n\nreplace example.com/a => ../a\n")
+		if goWorkIrgoGenerated(path) {
+			t.Fatal("expected marked go.work with replace to be protected")
+		}
+	})
+
+	t.Run("marked irgo-shaped file is regenerable", func(t *testing.T) {
+		mobileDir := filepath.Join(os.TempDir(), "golang-mobile")
+		path := write("markedclean.work", goWorkGeneratedMarker+
+			fmt.Sprintf("\n\ngo 1.24\n\nuse (\n\t.\n\t%s\n)\n", mobileDir))
 		if !goWorkIrgoGenerated(path) {
-			t.Fatal("expected marker to be definitive provenance")
+			t.Fatal("expected unmodified marked go.work to be regenerable")
 		}
 	})
 
