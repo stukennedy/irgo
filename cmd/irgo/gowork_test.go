@@ -216,3 +216,37 @@ func TestGoWorkIrgoGeneratedEdgeCases(t *testing.T) {
 		}
 	})
 }
+
+// The generation marker is definitive provenance: files carrying it are
+// regenerable no matter what they contain, and new files always carry it.
+func TestGoWorkGeneratedMarker(t *testing.T) {
+	dir := t.TempDir()
+
+	write := func(name, content string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+		return path
+	}
+
+	t.Run("marker makes any content regenerable", func(t *testing.T) {
+		path := write("marked.work", goWorkGeneratedMarker+
+			"\n\ngo 1.24\n\nuse (\n\t.\n\t../some-custom-module\n)\n")
+		if !goWorkIrgoGenerated(path) {
+			t.Fatal("expected marker to be definitive provenance")
+		}
+	})
+
+	t.Run("vanished custom module named golang-mobile without marker is customized when other custom entries exist", func(t *testing.T) {
+		// Codex round-5 scenario: a customized workspace with a removed
+		// module that happens to be named golang-mobile. Without the
+		// marker, the extra custom entry keeps the file protected.
+		gone := filepath.Join(dir, "vendor-forks", "golang-mobile")
+		path := write("nomarker.work", fmt.Sprintf(
+			"go 1.24\n\nuse (\n\t.\n\t%s\n\t../their-other-module\n)\n", gone))
+		if goWorkIrgoGenerated(path) {
+			t.Fatal("expected unmarked customized file to stay protected")
+		}
+	})
+}
