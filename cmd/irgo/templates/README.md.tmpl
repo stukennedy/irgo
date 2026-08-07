@@ -52,7 +52,9 @@ sync, and no API layer to write twice.
 │   ├── css/input.css    # Tailwind source (yours)
 │   └── css/output.css   # generated — do not edit
 ├── mobile/mobile.go     # gomobile bridge (framework-owned)
-├── ios/Example/         # native iOS shell — generated, not committed
+├── ios/Example/         # native iOS shell, Xcode path — generated, not committed
+├── ios/App/             # native iOS shell, SwiftPM/xtool path (Linux) —
+│                        #   generated on demand, not committed
 ├── android/Example/     # native Android shell — generated, not committed
 ├── irgo.package.toml    # store/signing settings (yours; secrets go in
 │                        #   irgo.package.local.toml, which is gitignored)
@@ -83,8 +85,16 @@ go tool irgo help app run      # detail and flags for one command
 command needs them: `build android` fetches JDK 17, the SDK and the NDK into
 `~/.irgo` — Android Studio is not involved. Undo it all with
 `tools remove android` — it shows what it will delete, with sizes, and asks
-first. The one exception is Xcode, which only
-Apple can install; `doctor` says so plainly.
+first. The one exception is Apple's own tools: on
+macOS that means Xcode, which only Apple can install; `doctor` says so plainly.
+
+**iOS without a Mac:** on Linux, `app build ios` and `app run ios` cross-compile
+with the [xtool](https://xtool.sh) Darwin SDK and deploy to a USB/network-connected
+iPhone via the `ios/App` SwiftPM shell (no Simulator — that part really does need
+macOS). Install xtool and its Darwin SDK once, then the commands behave exactly
+like they do on a Mac; `doctor` reports whether this host is ready. Dev mode
+(`app run ios --dev`) serves from your machine's LAN address, since a physical
+device cannot reach localhost.
 
 ## Working on irgo itself
 

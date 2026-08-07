@@ -4,6 +4,15 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>Example</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Development builds connect to the hot-reload dev server on your local network.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Dev mode loads http:// from the host machine's LAN address.
+		     Scoped to local networking only; remote loads still require TLS. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
