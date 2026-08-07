@@ -345,6 +345,24 @@ func TestGoWorkIrgoGeneratedLegacyIrgoCheckout(t *testing.T) {
 		t.Fatal("expected legacy irgo checkout entry to be recognized as irgo's own")
 	}
 
+	// A corrupted checkout (valid module line, malformed body) must not
+	// count as provenance either (round 13: strict parse everywhere).
+	corruptCheckout := filepath.Join(dir, "corrupt-irgo")
+	if err := os.MkdirAll(corruptCheckout, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(corruptCheckout, "go.mod"),
+		[]byte("module github.com/stukennedy/irgo\n\nrequire (\n\texample.com/dep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	content = fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n)\n", corruptCheckout)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if goWorkIrgoGenerated(path) {
+		t.Fatal("expected corrupted checkout go.mod to be rejected as provenance")
+	}
+
 	// A module whose path merely contains the irgo path as a prefix must
 	// not count as provenance (round 9: exact match, not substring).
 	tools := filepath.Join(dir, "irgo-tools")

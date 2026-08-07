@@ -501,23 +501,33 @@ func goWorkIrgoGenerated(path string) bool {
 // truncated or malformed go.mod left by an interrupted checkout, which Go
 // would reject just the same.
 func isModuleDir(dir string) bool {
+	return parseModulePath(dir) != ""
+}
+
+// parseModulePath returns the module path declared by dir/go.mod, or "" if
+// the file is missing, unreadable, or fails a full strict parse.
+// modfile.ModulePath would tolerate errors elsewhere in the file by
+// contract, but Go itself does not — a valid module line above a truncated
+// require block still fails to load, so both the workspace validator and
+// the destructive-provenance check must use the strict parse.
+func parseModulePath(dir string) string {
 	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
 	if err != nil {
-		return false
+		return ""
 	}
-	// Full strict parse: modfile.ModulePath tolerates errors elsewhere in
-	// the file by contract, but Go itself does not — a valid module line
-	// above a truncated require block still fails to load.
 	f, err := modfile.Parse("go.mod", data, nil)
-	return err == nil && f.Module != nil && f.Module.Mod.Path != ""
+	if err != nil || f.Module == nil {
+		return ""
+	}
+	return f.Module.Mod.Path
 }
 
 // isIrgoCheckout reports whether dir is a checkout of the irgo framework
-// itself, identified by its go.mod module declaration. The path is parsed
-// and matched exactly — a substring test would also accept e.g.
-// github.com/stukennedy/irgo-tools, or the path appearing in a comment,
-// and this result gates a destructive regeneration.
+// itself, identified by its go.mod module declaration. The path is
+// strict-parsed and matched exactly: a substring test would accept e.g.
+// github.com/stukennedy/irgo-tools, and a tolerant parse would accept a
+// corrupted checkout — both would wrongly authorize a destructive
+// regeneration.
 func isIrgoCheckout(dir string) bool {
-	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
-	return err == nil && modfile.ModulePath(data) == "github.com/stukennedy/irgo"
+	return parseModulePath(dir) == "github.com/stukennedy/irgo"
 }
