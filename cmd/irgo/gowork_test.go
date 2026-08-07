@@ -120,3 +120,50 @@ func TestGoWorkFileValid(t *testing.T) {
 		}
 	})
 }
+
+// goWorkIrgoGenerated gates the wholesale delete-and-regenerate repair: only
+// files containing exactly the members irgo writes may be destroyed. A
+// customized workspace (replace directives, extra use entries) is
+// unrecoverable — go.work is gitignored in generated projects.
+func TestGoWorkIrgoGenerated(t *testing.T) {
+	dir := t.TempDir()
+	mobileDir := filepath.Join(os.TempDir(), "golang-mobile")
+
+	write := func(name, content string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+		return path
+	}
+
+	t.Run("irgo-shaped file is regenerable", func(t *testing.T) {
+		path := write("irgo.work", fmt.Sprintf("go 1.24\n\nuse (\n\t.\n\t%s\n)\n", mobileDir))
+		if !goWorkIrgoGenerated(path) {
+			t.Fatal("expected irgo-shaped go.work to be regenerable")
+		}
+	})
+
+	t.Run("replace directive marks it customized", func(t *testing.T) {
+		path := write("replace.work", fmt.Sprintf(
+			"go 1.24\n\nuse (\n\t.\n\t%s\n)\n\nreplace example.com/a => ../a\n", mobileDir))
+		if goWorkIrgoGenerated(path) {
+			t.Fatal("expected replace directive to mark the file customized")
+		}
+	})
+
+	t.Run("unknown use entry marks it customized", func(t *testing.T) {
+		path := write("extra.work", fmt.Sprintf(
+			"go 1.24\n\nuse (\n\t.\n\t%s\n\t../some-local-module\n)\n", mobileDir))
+		if goWorkIrgoGenerated(path) {
+			t.Fatal("expected extra use entry to mark the file customized")
+		}
+	})
+
+	t.Run("unparseable file is regenerable", func(t *testing.T) {
+		path := write("broken.work", "use (\n\tnever closed\n")
+		if !goWorkIrgoGenerated(path) {
+			t.Fatal("expected unparseable go.work to be regenerable (go rejects it anyway)")
+		}
+	})
+}

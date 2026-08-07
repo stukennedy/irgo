@@ -145,6 +145,14 @@ func ensureMobileBuildSetup() error {
 	// and dies on the stale file, so validating afterwards would never repair
 	// exactly the legacy projects this exists for.
 	if _, err := os.Stat("go.work"); err == nil && !goWorkFileValid("go.work") {
+		// Only files irgo itself generated are regenerated wholesale.
+		// go.work is gitignored in generated projects, so deleting a
+		// developer's customized workspace (replace directives, extra use
+		// entries) would destroy configuration with no way to recover it.
+		if !goWorkIrgoGenerated("go.work") {
+			return fmt.Errorf("go.work references missing directories, but contains custom directives (replace or extra use entries) that irgo will not overwrite.\n" +
+				"  Fix the stale entries in go.work, or delete go.work and go.work.sum to let irgo regenerate them")
+		}
 		fmt.Println("go.work references missing directories — regenerating")
 		os.Remove("go.work")
 		os.Remove("go.work.sum")
@@ -386,6 +394,50 @@ func goWorkFileValid(path string) bool {
 		// partial x/mobile clone — e.g. a process killed between MkdirAll
 		// and checkout — and the workspace would stay broken.
 		if _, err := os.Stat(filepath.Join(p, "go.mod")); os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
+}
+
+// goWorkIrgoGenerated reports whether a go.work file contains only the
+// members irgo itself writes — the project root, the irgo checkout (local
+// development), and the temp x/mobile clone — and no replace directives.
+// Only such files are safe to delete and regenerate; anything else carries
+// developer customization that must not be destroyed (go.work is gitignored
+// in generated projects, so it is unrecoverable).
+//
+// An unparseable file counts as irgo-generated: Go rejects it outright, so
+// there is no working configuration to preserve.
+func goWorkIrgoGenerated(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	wf, err := modfile.ParseWork(path, data, nil)
+	if err != nil {
+		return true
+	}
+	if len(wf.Replace) > 0 {
+		return false
+	}
+
+	known := map[string]bool{
+		filepath.Clean("."):                          true,
+		filepath.Join(os.TempDir(), "golang-mobile"): true,
+	}
+	if irgoPath := getIrgoPath(); irgoPath != "" {
+		known[filepath.Clean(irgoPath)] = true
+	}
+
+	dir := filepath.Dir(path)
+	for _, use := range wf.Use {
+		p := filepath.Clean(use.Path)
+		if !known[p] {
+			// Relative entries resolve against the go.work directory.
+			if !filepath.IsAbs(p) && known[filepath.Join(dir, p)] {
+				continue
+			}
 			return false
 		}
 	}
