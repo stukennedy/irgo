@@ -215,10 +215,14 @@ func TestGoWorkIrgoGenerated(t *testing.T) {
 		}
 	})
 
-	t.Run("marked unparseable file is regenerable", func(t *testing.T) {
+	t.Run("marked unparseable file is protected", func(t *testing.T) {
+		// go work edit preserves the marker, so a broken file with it may
+		// still be a customized workspace mid-edit; unparseable content
+		// cannot be shown to be irgo-only, so it is protected regardless
+		// of the marker (round 20).
 		path := write("brokenmarked.work", goWorkGeneratedMarker+"\nuse (\n\tnever closed\n")
-		if !goWorkIrgoGenerated(path) {
-			t.Fatal("expected marked go.work to be regenerable even when broken")
+		if goWorkIrgoGenerated(path) {
+			t.Fatal("expected marked unparseable go.work to be protected")
 		}
 	})
 }
