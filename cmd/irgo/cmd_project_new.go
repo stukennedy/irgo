@@ -174,6 +174,37 @@ func getIrgoPath() string {
 	return ""
 }
 
+// sanitizeIdentifier converts a project name into a form usable as a Java/Kotlin
+// package fragment or Go package name ({{PROJECT_IDENT}}). Specifically:
+//   - non-alphanumeric characters (other than _) are replaced with underscores
+//   - leading digits are prefixed with `app` (Java doesn't allow identifiers to
+//     start with a digit)
+//   - the empty string becomes "app"
+//
+// Examples: "my-app" -> "my_app", "123game" -> "app123game", "hi" -> "hi".
+// For Apple bundle IDs, which reject underscores too, see sanitizeBundleIdent.
+func sanitizeIdentifier(name string) string {
+	if name == "" {
+		return "app"
+	}
+	var b strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	result := b.String()
+	if len(result) > 0 && result[0] >= '0' && result[0] <= '9' {
+		result = "app" + result
+	}
+	if result == "" {
+		return "app"
+	}
+	return result
+}
+
 // isRemoteModulePath checks if a path looks like a remote Go module path
 func isRemoteModulePath(path string) bool {
 	remotePrefixes := []string{

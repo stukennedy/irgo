@@ -195,6 +195,8 @@ func renderTemplateBody(body, modulePath string) string {
 // text "{{COMMANDS}}" where the command reference should have been.
 func renderTemplate(body, projectName, modulePath, replace string) string {
 	body = strings.ReplaceAll(body, "{{PROJECT_NAME}}", projectName)
+	body = strings.ReplaceAll(body, "{{PROJECT_IDENT}}", sanitizeIdentifier(projectName))
+	body = strings.ReplaceAll(body, "{{BUNDLE_IDENT}}", sanitizeBundleIdent(projectName))
 	body = strings.ReplaceAll(body, "{{MODULE_PATH}}", modulePath)
 	body = strings.ReplaceAll(body, "{{GO_VERSION}}", scaffoldGoVersion())
 	body = strings.ReplaceAll(body, "{{REPLACE_DIRECTIVE}}", replace)
