@@ -99,20 +99,26 @@ func hostCapabilities() []capability {
 			capability{"ios (device/App Store)", devState, devNote},
 		)
 	} else {
-		state, note := capAction,
-			"install xtool + a Swift toolchain and run 'xtool setup' (https://xtool.sh)"
+		// Framework builds need only the Darwin SDK toolchain — buildIOSXtool
+		// never invokes the xtool binary itself. Deployment to a device
+		// additionally needs xtool, so the two capabilities are reported
+		// independently: a host without xtool can still build frameworks.
+		fwState, fwNote := capAction,
+			"install a Swift toolchain and the xtool Darwin SDK ('xtool setup', https://xtool.sh)"
+		devState, devNote := fwState, fwNote
 		if _, err := findAppleToolchain(); err == nil {
+			fwState, fwNote = capReady, "xtool Darwin SDK present"
 			if has("xtool") {
-				state, note = capReady, "xtool Darwin SDK present"
+				devState, devNote = capReady, "xtool Darwin SDK present"
 			} else {
-				state, note = capAction, "Darwin SDK present — install xtool (https://xtool.sh) to deploy"
+				devState, devNote = capAction, "Darwin SDK present — install xtool (https://xtool.sh) to deploy"
 			}
 		}
 		caps = append(caps,
-			capability{"ios (framework)", state, note},
+			capability{"ios (framework)", fwState, fwNote},
 			capability{"ios (simulator app)", capBlocked,
 				"requires macOS (Xcode) — no iOS Simulator on " + runtime.GOOS},
-			capability{"ios (device via xtool)", state, note},
+			capability{"ios (device via xtool)", devState, devNote},
 		)
 	}
 

@@ -6,10 +6,14 @@
    - no grey tap-highlight flash on taps
    - no long-press magnifier/callout sheet on links and images
    - no rubber-band overscroll of the page itself
-   Text inputs and editable content keep normal selection behavior. */
+   -webkit-touch-callout is scoped to links/images rather than set on html:
+   it inherits, so a root-level `none` would also suppress the system
+   selection/copy callout on inputs, textareas and contenteditable. */
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
+  }
+  a, img {
     -webkit-touch-callout: none;
   }
   body {
