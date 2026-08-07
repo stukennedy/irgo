@@ -183,9 +183,9 @@ func ensureMobileBuildSetup() error {
 		// checkout) must be removed and re-cloned, or the regenerated
 		// go.work would point at a directory Go still cannot load.
 		mobileDir := filepath.Join(os.TempDir(), "golang-mobile")
-		if !isModuleDir(mobileDir) {
+		if !mobileCloneUsable(mobileDir) {
 			if _, statErr := os.Stat(mobileDir); statErr == nil {
-				fmt.Println("Removing partial x/mobile clone...")
+				fmt.Println("Removing unusable or stale x/mobile clone...")
 				// A failed removal must be fatal: the existence check below
 				// would see the directory, skip the clone, and write a
 				// workspace referencing a module Go cannot load.
@@ -543,4 +543,18 @@ func parseModulePath(dir string) string {
 // regeneration.
 func isIrgoCheckout(dir string) bool {
 	return parseModulePath(dir) == "github.com/stukennedy/irgo"
+}
+
+// mobileCloneUsable reports whether the temp clone is the module we expect
+// at the revision we pin. Accepting any parseable module here would let
+// setup rewrite an unrelated directory's go.mod and install tools from
+// unverified source (the dir name is guessable), and accepting the right
+// module at the wrong revision would mean pinXMobile bumps never take
+// effect for machines with an existing clone.
+func mobileCloneUsable(dir string) bool {
+	if parseModulePath(dir) != "golang.org/x/mobile" {
+		return false
+	}
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	return err == nil && strings.TrimSpace(string(out)) == pinXMobile
 }

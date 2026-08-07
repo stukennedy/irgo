@@ -417,3 +417,46 @@ func TestGoWorkIrgoGeneratedLegacyIrgoCheckout(t *testing.T) {
 		t.Fatal("expected non-irgo module entry to mark the file customized")
 	}
 }
+
+// mobileCloneUsable must reject directories that are not the pinned
+// golang.org/x/mobile checkout: an unrelated module squatting the temp path
+// would otherwise have its go.mod rewritten and be used as a tool source,
+// and a right-module/wrong-revision clone would defeat pinXMobile.
+func TestMobileCloneUsable(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("missing dir is unusable", func(t *testing.T) {
+		if mobileCloneUsable(filepath.Join(dir, "nope")) {
+			t.Fatal("expected missing dir to be unusable")
+		}
+	})
+
+	t.Run("unrelated module is unusable", func(t *testing.T) {
+		other := filepath.Join(dir, "other")
+		if err := os.MkdirAll(other, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(other, "go.mod"),
+			[]byte("module example.com/other\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if mobileCloneUsable(other) {
+			t.Fatal("expected unrelated module to be unusable")
+		}
+	})
+
+	t.Run("right module without pinned git revision is unusable", func(t *testing.T) {
+		fake := filepath.Join(dir, "fake-xmobile")
+		if err := os.MkdirAll(fake, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(fake, "go.mod"),
+			[]byte("module golang.org/x/mobile\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		// No git repo at all — rev-parse fails, so the pin cannot be verified.
+		if mobileCloneUsable(fake) {
+			t.Fatal("expected unverifiable revision to be unusable")
+		}
+	})
+}
