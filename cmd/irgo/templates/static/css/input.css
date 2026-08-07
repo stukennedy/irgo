@@ -2,6 +2,21 @@
 
 @import "tailwindcss";
 
+/* Native-app feel inside the mobile/desktop WebView:
+   - no grey tap-highlight flash on taps
+   - no long-press magnifier/callout sheet on links and images
+   - no rubber-band overscroll of the page itself
+   Text inputs and editable content keep normal selection behavior. */
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
 /* ============================================
    CONSTELLATION DEMO - Cosmic Theme
    ============================================ */

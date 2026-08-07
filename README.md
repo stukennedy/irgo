@@ -156,6 +156,20 @@ irgo app run ios --dev       # Hot-reload with iOS Simulator
 irgo app run ios             # Production build
 ```
 
+#### iOS on Linux (xtool)
+
+On Linux, `irgo app run ios` deploys to a USB/network-connected physical
+device using [xtool](https://xtool.sh) instead of Xcode + Simulator, and
+`irgo app build ios` cross-compiles the device slice (ios-arm64) of the
+framework with the xtool Darwin SDK. Install xtool and a Swift 6.1+
+toolchain, run `xtool setup` once (requires Xcode.xip), and connect a
+device. The app itself is a SwiftPM project scaffolded at `ios/App`.
+
+In `--dev` mode the device connects to the dev server over your LAN
+(override the URL with `IRGO_DEV_SERVER=http://<host>:8080`). If your
+Darwin SDK lives outside `~/.swiftpm/swift-sdks`, point `IRGO_DARWIN_SDK`
+at it. `irgo tools doctor` reports what is missing.
+
 ### Build for Production
 
 ```bash
