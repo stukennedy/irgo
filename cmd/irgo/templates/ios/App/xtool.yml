@@ -1,0 +1,6 @@
+# xtool project configuration (https://xtool.sh)
+# Used by `irgo app run ios` / `xtool dev` on Linux to build, sign, and
+# install this app on a physical iOS device.
+version: 1
+bundleID: com.irgo.{{BUNDLE_IDENT}}
+infoPath: Info.plist

@@ -90,6 +90,22 @@ mobile: ios android js
 ANDROID_SHELL_FILES = IrgoActivity IrgoJSInterface IrgoNative IrgoPlugins IrgoWebViewClient
 IOS_SHELL_FILES = IrgoSchemeHandler IrgoWebSocketBridge IrgoNative IrgoPlugins
 
+# The SwiftPM/xtool iOS shell exists twice — the repo copy (ios/App) and the
+# CLI template (cmd/irgo/templates/ios/App) — and must not drift.
+# IrgoSchemeHandler/IrgoNative/IrgoPlugins are byte-identical copies of the
+# canonical ios/Irgo shells. IrgoBridge and IrgoWebSocketBridge follow the
+# generated-project variants in cmd/irgo/templates/ios/Example (a project's
+# own mobile package binds as MobileResponse, not CoreResponse; the
+# WebSocket bridge is currently identical to ios/Irgo but sourced from the
+# Example template so the scaffold API stays authoritative for ios/App).
+# (IrgoWebViewController.swift and App.swift are hand-maintained — the
+# controller adds dev-mode support, App.swift is the SwiftPM entry point —
+# so they sync repo copy -> template only.)
+IOS_APP_DIRS = ios/App/Sources/App cmd/irgo/templates/ios/App/Sources/App
+IOS_APP_FROM_IRGO = IrgoSchemeHandler IrgoNative IrgoPlugins
+IOS_APP_FROM_EXAMPLE = IrgoBridge IrgoWebSocketBridge
+IOS_APP_HAND_MAINTAINED = App IrgoWebViewController
+
 sync-templates:
 	@for f in $(ANDROID_SHELL_FILES); do \
 		cp android/app/src/main/kotlin/com/irgo/$$f.kt \
@@ -98,6 +114,18 @@ sync-templates:
 	@for f in $(IOS_SHELL_FILES); do \
 		cp ios/Irgo/$$f.swift \
 		   cmd/irgo/templates/ios/Example/Example/$$f.swift; \
+	done
+	@for d in $(IOS_APP_DIRS); do \
+		for f in $(IOS_APP_FROM_IRGO); do \
+			cp ios/Irgo/$$f.swift $$d/$$f.swift; \
+		done; \
+		for f in $(IOS_APP_FROM_EXAMPLE); do \
+			cp cmd/irgo/templates/ios/Example/Example/$$f.swift $$d/$$f.swift; \
+		done; \
+	done
+	@for f in $(IOS_APP_HAND_MAINTAINED); do \
+		cp ios/App/Sources/App/$$f.swift \
+		   cmd/irgo/templates/ios/App/Sources/App/$$f.swift; \
 	done
 	@echo "Native shell templates synced"
 
@@ -111,6 +139,18 @@ check-templates:
 	for f in $(IOS_SHELL_FILES); do \
 		diff -q ios/Irgo/$$f.swift \
 			cmd/irgo/templates/ios/Example/Example/$$f.swift || ok=0; \
+	done; \
+	for d in $(IOS_APP_DIRS); do \
+		for f in $(IOS_APP_FROM_IRGO); do \
+			diff -q ios/Irgo/$$f.swift $$d/$$f.swift || ok=0; \
+		done; \
+		for f in $(IOS_APP_FROM_EXAMPLE); do \
+			diff -q cmd/irgo/templates/ios/Example/Example/$$f.swift $$d/$$f.swift || ok=0; \
+		done; \
+	done; \
+	for f in $(IOS_APP_HAND_MAINTAINED); do \
+		diff -q ios/App/Sources/App/$$f.swift \
+			cmd/irgo/templates/ios/App/Sources/App/$$f.swift || ok=0; \
 	done; \
 	if [ $$ok -eq 1 ]; then echo "Templates in sync"; else echo "Templates out of sync - run 'make sync-templates'"; exit 1; fi
 
