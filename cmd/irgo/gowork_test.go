@@ -160,10 +160,20 @@ func TestGoWorkIrgoGenerated(t *testing.T) {
 		}
 	})
 
-	t.Run("unparseable file is regenerable", func(t *testing.T) {
+	t.Run("unmarked unparseable file is protected", func(t *testing.T) {
+		// A parse failure on an unmarked file carries no provenance: it may
+		// be a developer's unfinished edit of a customized workspace, so it
+		// must not be deleted.
 		path := write("broken.work", "use (\n\tnever closed\n")
+		if goWorkIrgoGenerated(path) {
+			t.Fatal("expected unmarked unparseable go.work to be protected")
+		}
+	})
+
+	t.Run("marked unparseable file is regenerable", func(t *testing.T) {
+		path := write("brokenmarked.work", goWorkGeneratedMarker+"\nuse (\n\tnever closed\n")
 		if !goWorkIrgoGenerated(path) {
-			t.Fatal("expected unparseable go.work to be regenerable (go rejects it anyway)")
+			t.Fatal("expected marked go.work to be regenerable even when broken")
 		}
 	})
 }

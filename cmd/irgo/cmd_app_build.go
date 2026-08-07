@@ -150,8 +150,8 @@ func ensureMobileBuildSetup() error {
 		// developer's customized workspace (replace directives, extra use
 		// entries) would destroy configuration with no way to recover it.
 		if !goWorkIrgoGenerated("go.work") {
-			return fmt.Errorf("go.work references missing directories, but contains custom directives (replace or extra use entries) that irgo will not overwrite.\n" +
-				"  Fix the stale entries in go.work, or delete go.work and go.work.sum to let irgo regenerate them")
+			return fmt.Errorf("go.work is stale or unparseable, but looks customized (replace/extra use entries, or edits irgo cannot verify) so irgo will not overwrite it.\n" +
+				"  Fix go.work by hand, or delete go.work and go.work.sum to let irgo regenerate them")
 		}
 		fmt.Println("go.work references missing directories — regenerating")
 		os.Remove("go.work")
@@ -425,9 +425,13 @@ func goWorkIrgoGenerated(path string) bool {
 	if strings.Contains(string(data), goWorkGeneratedMarker) {
 		return true
 	}
+	// Without the marker, a parse failure carries no provenance — it may be
+	// a developer's unfinished edit of a customized workspace, and deleting
+	// it would lose whatever they were writing. Protect it; the error path
+	// tells them how to recover.
 	wf, err := modfile.ParseWork(path, data, nil)
 	if err != nil {
-		return true
+		return false
 	}
 	// toolchain and godebug are workspace settings irgo never writes —
 	// their presence means a developer configured this file by hand.
