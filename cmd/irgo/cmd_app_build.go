@@ -154,8 +154,16 @@ func ensureMobileBuildSetup() error {
 				"  Fix go.work by hand, or delete go.work and go.work.sum to let irgo regenerate them")
 		}
 		fmt.Println("go.work references missing directories — regenerating")
-		os.Remove("go.work")
-		os.Remove("go.work.sum")
+		// Failed removal must be fatal: continuing would leave the stale
+		// file in place, skip regeneration below, and report success while
+		// the next gomobile command fails on the same missing use target
+		// (e.g. Windows file locks, or an unwritable project directory).
+		if err := os.Remove("go.work"); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("removing stale go.work: %w", err)
+		}
+		if err := os.Remove("go.work.sum"); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("removing stale go.work.sum: %w", err)
+		}
 	}
 
 	if err := ensureGobindTool(); err != nil {
