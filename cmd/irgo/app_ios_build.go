@@ -15,6 +15,12 @@ import (
 const iosBundleID = "com.irgo.Example"
 
 func buildIOS(modulePath string) error {
+	// On non-macOS hosts there is no Xcode; cross-compile the device slice
+	// with the xtool Darwin SDK instead (see app_ios_xtool.go).
+	if !isDarwinHost() {
+		return buildIOSXtool(modulePath)
+	}
+
 	fmt.Println("Building iOS framework...")
 
 	outPath := "build/ios/Irgo.xcframework"
@@ -135,6 +141,12 @@ func buildXcodeApp(iosProjectPath string, device bool, team string) (string, err
 // an irgo project upgrade.
 
 func runIOS(devMode bool) error {
+	// On non-macOS hosts, deploy to a physical device with xtool
+	// (https://xtool.sh) instead of Xcode + Simulator.
+	if !isDarwinHost() {
+		return runIOSXtool(devMode)
+	}
+
 	// Check for Xcode
 	if err := checkTool("xcodebuild", "Install Xcode from the App Store"); err != nil {
 		return err

@@ -44,10 +44,13 @@ func runBuild(target string, sim, device bool, team string) error {
 
 	switch target {
 	case "ios":
-		if err := requireMacOS("iOS"); err != nil {
-			return err
-		}
+		// The Simulator and Xcode-signed device apps genuinely need Xcode;
+		// the plain framework build works on Linux too, via the xtool
+		// Darwin SDK (buildIOS dispatches — see app_ios_xtool.go).
 		if sim || device {
+			if err := requireMacOS("iOS app"); err != nil {
+				return err
+			}
 			return buildIOSApp(modulePath, device, team)
 		}
 		return buildIOS(modulePath)
@@ -56,14 +59,22 @@ func runBuild(target string, sim, device bool, team string) error {
 	case "cloudflare":
 		return buildCloudflare(modulePath)
 	case "all":
-		// Android builds anywhere; iOS cannot leave macOS. Skip rather than
-		// fail so `irgo app build all` stays usable on Linux/Windows CI.
-		if runtime.GOOS == "darwin" {
+		// Android builds anywhere; iOS needs Xcode (macOS) or the xtool
+		// Darwin SDK (Linux). Skip rather than fail when neither is there,
+		// so `irgo app build all` stays usable on Linux/Windows CI.
+		switch {
+		case runtime.GOOS == "darwin":
 			if err := buildIOS(modulePath); err != nil {
 				return err
 			}
-		} else {
-			fmt.Printf("Skipping iOS framework: requires macOS (host is %s)\n", runtime.GOOS)
+		default:
+			if _, err := findAppleToolchain(); err == nil {
+				if err := buildIOS(modulePath); err != nil {
+					return err
+				}
+			} else {
+				fmt.Printf("Skipping iOS framework: needs macOS (Xcode) or the xtool Darwin SDK (host is %s)\n", runtime.GOOS)
+			}
 		}
 		return buildAndroid(modulePath)
 	default:

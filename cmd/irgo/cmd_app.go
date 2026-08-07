@@ -279,6 +279,11 @@ func runAppRun(target string, args []string) error {
 		return runDesktop(devMode, hasFlag(rest, "--built", "-b"))
 	}
 	if target == "ios" && hasFlag(rest, "--device", "-D") {
+		// On non-macOS hosts a device is the only thing `run ios` can
+		// target, and xtool (not devicectl) does the deploying.
+		if !isDarwinHost() {
+			return runIOSXtool(devMode)
+		}
 		team := ""
 		for i := 0; i < len(rest)-1; i++ {
 			if rest[i] == "--team" {

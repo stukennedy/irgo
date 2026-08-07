@@ -188,7 +188,11 @@ binding. Per-connection state within one SSE stream is fine.
 Toolchains install themselves: the Android SDK, NDK, JDK and gomobile are
 provisioned on first use. Cross-building is limited by the host — macOS can
 produce macOS and Windows desktop binaries, Linux only Linux. Ask irgo tools
-doctor what this machine can do.`,
+doctor what this machine can do.
+
+On Linux, ios builds the device slice (ios-arm64) with the xtool Darwin SDK
+(https://xtool.sh) instead of Xcode, and copies the framework into the
+ios/App SwiftPM project. --sim and --device still need macOS.`,
 	},
 
 	"app run": {
@@ -208,7 +212,12 @@ doctor what this machine can do.`,
 		},
 		notes: `Android uses whatever device or emulator is already connected, and only boots
 its own when nothing is. To run a particular AVD, start it first — there is no
-flag to disagree with what is actually attached.`,
+flag to disagree with what is actually attached.
+
+On Linux, ios deploys to a USB/network-connected physical device via xtool
+(https://xtool.sh) instead of the Simulator. With --dev the device connects
+to the dev server over your LAN; IRGO_DEV_SERVER=http://<host>:8080 overrides
+the URL.`,
 	},
 
 	"app deploy": {

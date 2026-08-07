@@ -192,7 +192,9 @@ func installTools() error {
 		fmt.Println("            cannot install for you).")
 		fmt.Println("  Windows — irgo installs mingw-w64 when cross-compiling.")
 	} else {
-		fmt.Printf("  iOS     — requires macOS; not buildable on %s.\n", runtime.GOOS)
+		fmt.Printf("  iOS     — deploys to a physical device from %s via xtool +\n", runtime.GOOS)
+		fmt.Println("            a Swift toolchain (https://xtool.sh); run 'xtool setup'")
+		fmt.Println("            once. The Simulator itself still needs macOS.")
 	}
 	return nil
 }
