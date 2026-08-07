@@ -509,6 +509,45 @@ func TestGoWorkIrgoGeneratedLegacyVanishedCheckout(t *testing.T) {
 			t.Fatal("expected unmarked go.work without clone signature to stay protected")
 		}
 	})
+
+	t.Run("vanished checkout with live old-TMPDIR x/mobile clone is regenerable", func(t *testing.T) {
+		// The prior session's clone still exists on disk but under an old
+		// TMPDIR: a live x/mobile checkout (strict parse, exact module) is
+		// irgo's clone all the same and carries the legacy signature
+		// (round 21).
+		liveClone := filepath.Join(dir, "live-old-tmp", "golang-mobile")
+		if err := os.MkdirAll(liveClone, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(liveClone, "go.mod"),
+			[]byte("module golang.org/x/mobile\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		path := write("legacy3.work", fmt.Sprintf(
+			"go 1.24\n\nuse (\n\t.\n\t%s\n\t%s\n)\n", goneCheckout, liveClone))
+		if !goWorkIrgoGenerated(path) {
+			t.Fatal("expected legacy go.work with live old x/mobile clone to be regenerable")
+		}
+	})
+
+	t.Run("live golang-mobile dir of another module is not a signature", func(t *testing.T) {
+		// A real custom module that merely sits in a directory named
+		// golang-mobile must not grant the legacy signature or be skipped
+		// as irgo's member.
+		imposter := filepath.Join(dir, "forks", "golang-mobile")
+		if err := os.MkdirAll(imposter, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(imposter, "go.mod"),
+			[]byte("module example.com/mymobile\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		path := write("imposter.work", fmt.Sprintf(
+			"go 1.24\n\nuse (\n\t.\n\t%s\n\t%s\n)\n", goneCheckout, imposter))
+		if goWorkIrgoGenerated(path) {
+			t.Fatal("expected non-x/mobile golang-mobile dir to leave the file protected")
+		}
+	})
 }
 
 // mobileCloneUsable must reject directories that are not the pinned

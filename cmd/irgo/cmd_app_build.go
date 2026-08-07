@@ -499,6 +499,10 @@ func goWorkIrgoGenerated(path string) bool {
 					provenance = true
 					break
 				}
+				if isXMobileCheckout(abs) {
+					provenance = true
+					break
+				}
 			}
 		}
 	}
@@ -527,12 +531,17 @@ func goWorkIrgoGenerated(path string) bool {
 		// Legacy files only (no marker): a go.work generated under an
 		// earlier TMPDIR references that session's golang-mobile clone, not
 		// the current os.TempDir()'s — exactly the macOS scenario this
-		// repair exists for. Recognize such entries as irgo's own, but only
-		// when the directory is gone: a live directory named golang-mobile
-		// could be a real custom module. New files carry the marker, so
-		// this heuristic ages out with pre-marker projects.
+		// repair exists for. Recognize such entries as irgo's own when the
+		// directory is gone, or when it is live and actually an x/mobile
+		// checkout (strict parse, exact module — a live directory merely
+		// named golang-mobile could be a real custom module and stays
+		// protected). New files carry the marker, so this heuristic ages
+		// out with pre-marker projects.
 		if filepath.Base(p) == "golang-mobile" {
 			if _, err := os.Stat(abs); os.IsNotExist(err) {
+				continue
+			}
+			if isXMobileCheckout(abs) {
 				continue
 			}
 		}
@@ -587,6 +596,14 @@ func isIrgoCheckout(dir string) bool {
 	return parseModulePath(dir) == "github.com/stukennedy/irgo"
 }
 
+// isXMobileCheckout reports whether dir is a checkout of golang.org/x/mobile
+// — the module irgo clones into $TMPDIR/golang-mobile. Same strict-parse,
+// exact-match standard as isIrgoCheckout, and for the same reason: it is
+// used as destructive provenance.
+func isXMobileCheckout(dir string) bool {
+	return parseModulePath(dir) == "golang.org/x/mobile"
+}
+
 // mobileCloneUsable reports whether the temp clone is the module we expect
 // at the revision we pin. Accepting any parseable module here would let
 // setup rewrite an unrelated directory's go.mod and install tools from
@@ -594,7 +611,7 @@ func isIrgoCheckout(dir string) bool {
 // module at the wrong revision would mean pinXMobile bumps never take
 // effect for machines with an existing clone.
 func mobileCloneUsable(dir string) bool {
-	if parseModulePath(dir) != "golang.org/x/mobile" {
+	if !isXMobileCheckout(dir) {
 		return false
 	}
 	out, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
