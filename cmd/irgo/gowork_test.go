@@ -187,8 +187,19 @@ func TestGoWorkIrgoGenerated(t *testing.T) {
 	})
 
 	t.Run("unknown use entry marks it customized", func(t *testing.T) {
+		// The custom module must be live: on a workspace carrying irgo's
+		// membership signature (the temp-clone entry), a vanished entry is
+		// only a dangling reference and no longer protects (round 19).
+		live := filepath.Join(dir, "some-local-module")
+		if err := os.MkdirAll(live, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(live, "go.mod"),
+			[]byte("module example.com/local\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		path := write("extra.work", fmt.Sprintf(
-			"go 1.24\n\nuse (\n\t.\n\t%s\n\t../some-local-module\n)\n", mobileDir))
+			"go 1.24\n\nuse (\n\t.\n\t%s\n\t%s\n)\n", mobileDir, live))
 		if goWorkIrgoGenerated(path) {
 			t.Fatal("expected extra use entry to mark the file customized")
 		}
@@ -324,10 +335,21 @@ func TestGoWorkGeneratedMarker(t *testing.T) {
 	t.Run("vanished custom module named golang-mobile without marker is customized when other custom entries exist", func(t *testing.T) {
 		// Codex round-5 scenario: a customized workspace with a removed
 		// module that happens to be named golang-mobile. Without the
-		// marker, the extra custom entry keeps the file protected.
+		// marker, a live extra custom entry keeps the file protected —
+		// live, because a vanished one would be only a dangling
+		// reference on a workspace bearing irgo's clone signature
+		// (round 19).
 		gone := filepath.Join(dir, "vendor-forks", "golang-mobile")
+		live := filepath.Join(dir, "their-other-module")
+		if err := os.MkdirAll(live, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(live, "go.mod"),
+			[]byte("module example.com/theirs\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		path := write("nomarker.work", fmt.Sprintf(
-			"go 1.24\n\nuse (\n\t.\n\t%s\n\t../their-other-module\n)\n", gone))
+			"go 1.24\n\nuse (\n\t.\n\t%s\n\t%s\n)\n", gone, live))
 		if goWorkIrgoGenerated(path) {
 			t.Fatal("expected unmarked customized file to stay protected")
 		}
@@ -436,6 +458,53 @@ func TestGoWorkIrgoGeneratedLegacyIrgoCheckout(t *testing.T) {
 	if goWorkIrgoGenerated(path) {
 		t.Fatal("expected non-irgo module entry to mark the file customized")
 	}
+}
+
+// An unmarked legacy workspace whose generated irgo checkout AND temp clone
+// were both deleted must still self-heal: the temp-clone use entry is irgo's
+// membership signature, standing in for the marker on pre-marker files
+// (review round 19).
+func TestGoWorkIrgoGeneratedLegacyVanishedCheckout(t *testing.T) {
+	dir := t.TempDir()
+
+	write := func(name, content string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+		return path
+	}
+
+	goneCheckout := filepath.Join(dir, "deleted-irgo-checkout")
+
+	t.Run("vanished checkout with vanished old-TMPDIR clone is regenerable", func(t *testing.T) {
+		goneClone := filepath.Join(dir, "old-tmp", "golang-mobile")
+		path := write("legacy.work", fmt.Sprintf(
+			"go 1.24\n\nuse (\n\t.\n\t%s\n\t%s\n)\n", goneCheckout, goneClone))
+		if !goWorkIrgoGenerated(path) {
+			t.Fatal("expected legacy go.work with vanished generated members to be regenerable")
+		}
+	})
+
+	t.Run("vanished checkout with current temp clone entry is regenerable", func(t *testing.T) {
+		mobileDir := filepath.Join(os.TempDir(), "golang-mobile")
+		path := write("legacy2.work", fmt.Sprintf(
+			"go 1.24\n\nuse (\n\t.\n\t%s\n\t%s\n)\n", goneCheckout, mobileDir))
+		if !goWorkIrgoGenerated(path) {
+			t.Fatal("expected legacy go.work with vanished checkout to be regenerable")
+		}
+	})
+
+	t.Run("vanished entry without any clone signature is protected", func(t *testing.T) {
+		// No marker and no golang-mobile member: nothing ties this file to
+		// irgo, so a vanished entry may be a customized workspace's deleted
+		// module and must not authorize regeneration.
+		path := write("custom.work", fmt.Sprintf(
+			"go 1.24\n\nuse (\n\t.\n\t%s\n)\n", goneCheckout))
+		if goWorkIrgoGenerated(path) {
+			t.Fatal("expected unmarked go.work without clone signature to stay protected")
+		}
+	})
 }
 
 // mobileCloneUsable must reject directories that are not the pinned

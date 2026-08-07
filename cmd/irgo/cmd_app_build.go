@@ -472,6 +472,34 @@ func goWorkIrgoGenerated(path string) bool {
 	}
 
 	dir := filepath.Dir(path)
+
+	// Legacy files carry no marker, but they carry irgo's signature all the
+	// same: a use entry for the private x/mobile temp clone. Nobody writes
+	// $TMPDIR/golang-mobile into a workspace by hand — irgo's generator is
+	// its only author — so such a member (at the current temp location, or
+	// vanished from an earlier TMPDIR's) is provenance that irgo wrote the
+	// membership, standing in for the marker below.
+	provenance := marked
+	if !provenance {
+		for _, use := range wf.Use {
+			p := filepath.Clean(use.Path)
+			abs := p
+			if !filepath.IsAbs(abs) {
+				abs = filepath.Join(dir, abs)
+			}
+			if known[abs] && filepath.Base(abs) == "golang-mobile" {
+				provenance = true
+				break
+			}
+			if filepath.Base(p) == "golang-mobile" {
+				if _, err := os.Stat(abs); os.IsNotExist(err) {
+					provenance = true
+					break
+				}
+			}
+		}
+	}
+
 	for _, use := range wf.Use {
 		p := filepath.Clean(use.Path)
 		abs := p
@@ -482,12 +510,13 @@ func goWorkIrgoGenerated(path string) bool {
 		if known[p] || known[abs] {
 			continue
 		}
-		// Marked files: irgo wrote the membership, so a vanished entry is
-		// one of its generated members (typically a deleted local irgo
+		// Files irgo provably generated (marker, or the legacy temp-clone
+		// signature above): irgo wrote the membership, so a vanished entry
+		// is one of its generated members (typically a deleted local irgo
 		// checkout). Even if a customization pointed there, regeneration
 		// loses only a dangling reference to a path that no longer exists.
 		// Live unknown entries still mean customization and stay protected.
-		if marked {
+		if provenance {
 			if _, err := os.Stat(abs); os.IsNotExist(err) {
 				continue
 			}
