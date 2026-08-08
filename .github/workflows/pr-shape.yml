@@ -1,0 +1,140 @@
+# Checks on the shape of a pull request, rather than its contents.
+#
+# #10 was opened from a fork's `main`. That made main the contributor's work
+# branch, so it collected unrelated commits, could never be fast-forwarded from
+# here again, and arrived as one change spanning 175 files and 40 top-level
+# areas. It was merged, and then needed #13 to restore template sync it broke,
+# #14 to redo a closed PR, and #15 to port another.
+#
+# None of that was visible while it was happening. Everything below is
+# mechanical and would have been.
+#
+# This runs here rather than in a git hook because a hook only protects the
+# machine it is installed on, and the contributor who needs it most is the one
+# who has not installed anything.
+
+name: pr-shape
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  shape:
+    name: shape
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The whole history: the comparisons below are against the base, and
+          # a shallow clone has no merge base to compare with.
+          fetch-depth: 0
+
+      - name: The branch is not the fork's default branch
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          case "$HEAD_REF" in
+            main | master)
+              cat >&2 <<EOF
+
+            This pull request is opened from '$HEAD_REF'.
+
+            That branch is the fork's mirror of this repository. Using it as a
+            work branch is what produced #10: it accumulates every unrelated
+            commit, it can no longer be fast-forwarded from upstream, and every
+            future contribution starts from the tangle rather than from here.
+
+            Move the work onto a branch and reopen:
+
+                git switch -c <type>/<short-name>
+                git push -u origin <type>/<short-name>
+
+            Then reset the fork's default branch to match this one:
+
+                git switch $HEAD_REF
+                git reset --hard upstream/$HEAD_REF
+
+          EOF
+              exit 1
+              ;;
+          esac
+          echo "branch is '$HEAD_REF' — fine"
+
+      - name: The change is one change
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          # "Area" is the first two path segments — cmd/irgo, pkg/secrets,
+          # docs-templ/content. It measures spread rather than size, because
+          # size alone is a poor signal: a large mechanical rename is easy to
+          # review and a small change across a dozen subsystems is not.
+          #
+          # Deletions are excluded. Removing a directory touches a great many
+          # areas and is the easiest thing there is to review — it is the
+          # opposite of what this is looking for, and counting it would fail
+          # exactly the small, single-purpose cleanups that should be
+          # encouraged.
+          areas=$(git diff --name-only --diff-filter=d "$BASE_SHA"...HEAD |
+                  sed 's|^\([^/]*/[^/]*\)/.*|\1|' | sort -u | wc -l | tr -d ' ')
+          files=$(git diff --name-only "$BASE_SHA"...HEAD | wc -l | tr -d ' ')
+
+          echo "$files files across $areas areas"
+
+          # Calibrated against this repository's own merged pull requests, so
+          # it cannot fail work the maintainer already considers reasonable:
+          # #13 touched 2 areas, #14 four, #15 five. #10 touched 40.
+          if [ "$areas" -le 20 ]; then
+            echo "within the usual shape for this repository"
+            exit 0
+          fi
+
+          case ",$LABELS," in
+            *,wide-change,*)
+              echo "::notice::$areas areas, allowed by the 'wide-change' label"
+              exit 0
+              ;;
+          esac
+
+          cat >&2 <<EOF
+
+          This pull request touches $areas top-level areas ($files files).
+
+          For comparison, this repository's own recent pull requests touched
+          two, four and five. The one that touched 40 is the reason this check
+          exists — it had to be taken apart afterwards, which cost more than
+          splitting it up front would have.
+
+          Two things are worth checking before splitting:
+
+            - Is there more than one theme here? If it cannot be named in a
+              few words, it is more than one pull request.
+            - Is there a judgement call buried in an otherwise additive change
+              — a deletion, a policy decision, a dependency swap? Those get
+              merged unnoticed and reverted later. They deserve their own
+              pull request so they can be answered on their own.
+
+          If the spread really is one change, add the 'wide-change' label and
+          this check will pass.
+
+          EOF
+          exit 1
+
+      - name: The branch is not far behind the base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # A warning, not a failure: being behind is normal and only becomes
+          # a problem when it is large enough that the rebase is its own
+          # project. Ours reached 130.
+          base=$(git merge-base "$BASE_SHA" HEAD)
+          behind=$(git rev-list --count "$base".."$BASE_SHA")
+          echo "$behind commits behind the base"
+          if [ "$behind" -gt 40 ]; then
+            echo "::warning::This branch is $behind commits behind the base. Rebasing now is cheaper than resolving it after review starts."
+          fi
