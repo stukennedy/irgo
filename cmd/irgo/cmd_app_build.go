@@ -144,9 +144,27 @@ func ensureGobindTool() error {
 	return nil
 }
 
+// mobileCloneDir is where the private x/mobile checkout lives.
+//
+// It used to be $TMPDIR/golang-mobile, which macOS sweeps. Once that happens
+// the generated go.work names a directory that is gone, and every `go` command
+// in the project fails — including `go tool irgo` and `go run ./cmd/irgo`, so
+// irgo cannot repair the file it wrote. The only way out is deleting go.work
+// by hand, which the error does not suggest.
+//
+// ~/.irgo is not swept, and irgo already owns it. The directory keeps its old
+// name so a go.work written by an earlier version is still recognised as
+// irgo's work.
+func mobileCloneDir() string { return filepath.Join(homeDir(), ".irgo", "golang-mobile") }
+
+// legacyMobileCloneDir is the old location, still recognised so a workspace
+// written before this change is identified as irgo-generated and cleaned up
+// rather than left for someone to puzzle over.
+func legacyMobileCloneDir() string { return filepath.Join(os.TempDir(), "golang-mobile") }
+
 func ensureMobileBuildSetup() error {
-	// An existing go.work can be stale: it references the temp x/mobile clone
-	// (os.TempDir()/golang-mobile) that macOS may clean up between sessions. A
+	// An existing go.work can be stale: it references the x/mobile clone, which
+	// older versions put in $TMPDIR where macOS sweeps it. A
 	// stale go.work breaks every `go` command with "use ...: directory does not
 	// exist", and irgo previously never validated it — users had to delete it
 	// by hand. Validate now; if any referenced dir is gone, drop the file (and
@@ -193,7 +211,7 @@ func ensureMobileBuildSetup() error {
 		// module: a partial clone (process killed between MkdirAll and
 		// checkout) must be removed and re-cloned, or the regenerated
 		// go.work would point at a directory Go still cannot load.
-		mobileDir := filepath.Join(os.TempDir(), "golang-mobile")
+		mobileDir := mobileCloneDir()
 		if !mobileCloneUsable(mobileDir) {
 			if _, statErr := os.Stat(mobileDir); statErr == nil {
 				fmt.Println("Removing unusable or stale x/mobile clone...")
@@ -481,8 +499,9 @@ func goWorkIrgoGenerated(path string) bool {
 	// the loop below via isIrgoCheckout's strict exact-path parse instead,
 	// which covers the discovered checkout and any previous one alike.
 	known := map[string]bool{
-		filepath.Clean("."):                          true,
-		filepath.Join(os.TempDir(), "golang-mobile"): true,
+		filepath.Clean("."):    true,
+		mobileCloneDir():       true,
+		legacyMobileCloneDir(): true,
 	}
 
 	dir := filepath.Dir(path)
