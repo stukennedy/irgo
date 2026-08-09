@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -229,6 +231,36 @@ func isRemoteModulePath(path string) bool {
 	return false
 }
 
+// explainTidyFailure turns one particular go error into something a person can
+// act on.
+//
+// A scaffolded project pins the CLI's own version. When that version has not
+// been tagged yet, every new project fails its first command with:
+//
+//	github.com/stukennedy/irgo@v0.4.0: reading .../go.mod at revision v0.4.0:
+//	unknown revision v0.4.0
+//
+// which reads as a broken template rather than an unpublished release, and is
+// followed a moment later by "Project created successfully!". The remedy
+// already exists — `irgo project pin` — so the only thing missing was saying
+// so at the moment it fails.
+func explainTidyFailure(stderr string) {
+	if !strings.Contains(stderr, "unknown revision") ||
+		!strings.Contains(stderr, irgoModulePath) {
+		return
+	}
+	fmt.Println()
+	fmt.Printf("This project pins %s at a version that is not published yet.\n", irgoModulePath)
+	fmt.Println("Nothing is wrong with the project; the version simply cannot be fetched.")
+	fmt.Println()
+	fmt.Println("Point it somewhere that resolves:")
+	fmt.Println("  go tool irgo project pin release        # the latest published version")
+	fmt.Println("  go tool irgo project pin local ../irgo  # a checkout you are editing")
+}
+
+// irgoModulePath is the module a scaffolded project depends on.
+const irgoModulePath = "github.com/stukennedy/irgo"
+
 func newProject(name string) error {
 	// Determine project directory, project name, and module path
 	var projectDir string
@@ -447,9 +479,11 @@ func newProject(name string) error {
 		fmt.Println("Running go mod tidy...")
 		tidyCmd := exec.Command(goBin(), "mod", "tidy")
 		tidyCmd.Dir = projectDir
+		var tidyErr bytes.Buffer
 		tidyCmd.Stdout = os.Stdout
-		tidyCmd.Stderr = os.Stderr
+		tidyCmd.Stderr = io.MultiWriter(os.Stderr, &tidyErr)
 		if err := tidyCmd.Run(); err != nil {
+			explainTidyFailure(tidyErr.String())
 			fmt.Printf("Warning: go mod tidy failed: %v\n", err)
 		}
 	}
