@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/stukennedy/irgo/pkg/livereload"
 	"todo/app"
 	"todo/templates"
-	"github.com/stukennedy/irgo/pkg/livereload"
 )
 
 func main() {

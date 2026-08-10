@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"todo/app"
-	"todo/templates"
 	"github.com/stukennedy/irgo/desktop"
 	"github.com/stukennedy/irgo/pkg/livereload"
+	"todo/app"
+	"todo/templates"
 )
 
 func main() {
