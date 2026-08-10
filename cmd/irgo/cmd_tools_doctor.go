@@ -470,3 +470,19 @@ func printAndroidDetail() {
 	}
 	fmt.Println("  detail        irgo tools doctor android")
 }
+
+func init() {
+	register(command{
+		noun: "tools", verb: "doctor", order: 20,
+		summary: "What this host can build; --fix repairs it",
+		args:    "[android] [--fix|--strict]",
+		usage: [][2]string{
+			{"", "Every target, and what is missing for the rest"},
+			{"android", "The Android toolchain in detail"},
+			{"--fix", "Install what is missing"},
+			{"--strict", "Exit non-zero if anything is missing (CI)"},
+		},
+		notes: `Reports the Go toolchain, templ and Tailwind, Xcode and its signing teams, and
+the Android SDK/NDK/JDK with the emulator and AVDs.`,
+	})
+}

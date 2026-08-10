@@ -91,3 +91,27 @@ func writeCIWorkflows(projectDir, modulePath string, force, verbose bool) error 
 	fmt.Println("what each store wants:  irgo app package setup --check")
 	return nil
 }
+
+func init() {
+	register(command{
+		noun: "project", verb: "ci", order: 40,
+		summary: "Scaffold the GitHub Actions workflows",
+		args:    "[--force]",
+		usage: [][2]string{
+			{"", "Write .github/workflows, keeping any that exist"},
+			{"--force", "Regenerate them"},
+		},
+		notes: `Writes build.yml (every target, on the OS each one needs) and release.yml
+(signed store artifacts). Both are generated from the CLI — the desktop matrix,
+the artifact paths and the action versions come from irgo, so they stay correct
+as it changes. Edit the template, not the output.
+
+Two jobs in build.yml are opt-in, off unless the repository sets a variable:
+  IRGO_TOOLCHAIN_ROUNDTRIP=true   install → doctor → build → uninstall, and
+                                  assert the machine comes back clean
+  IRGO_GENERATED_REPO=true        assert the repo still matches project new
+
+The round-trip deletes the Android toolchain to prove the uninstall works, so
+it refuses to run anywhere but a github-hosted runner.`,
+	})
+}

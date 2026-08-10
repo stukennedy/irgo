@@ -272,3 +272,24 @@ func projectReplacement() string {
 	}
 	return ""
 }
+
+func init() {
+	register(command{
+		noun: "project", verb: "pin", order: 30,
+		summary: "Choose which irgo this project builds against",
+		args:    "[local|release|<version>]",
+		usage: [][2]string{
+			{"", "Show the current pin and where it came from"},
+			{"local [dir]", "Build a checkout you are editing"},
+			{"release", "Track the published module"},
+			{"<version>", "A published version, e.g. v0.4.0"},
+			{"<owner>/<repo>@<tag>", "A fork"},
+		},
+		notes: "go.mod is the only pin: `go tool irgo` builds whatever it names, so there is\n" +
+			`nothing installed globally to fall out of step. A pin that does not resolve
+leaves go.mod untouched rather than half-written.
+
+A fork keeps the upstream module path, so the proxy cannot serve it:
+  go env -w GOPRIVATE='github.com/<owner>/*'`,
+	})
+}

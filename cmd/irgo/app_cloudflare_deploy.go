@@ -80,3 +80,25 @@ func cloudflareWorkerName() string {
 	}
 	return ""
 }
+
+func init() {
+	register(command{
+		noun: "app", verb: "deploy", order: 30,
+		summary: "Build the Worker and put it live",
+		targets: []string{"cloudflare"},
+		usage:   [][2]string{{"cloudflare", "Build the Worker and deploy it"}},
+		notes: `Builds first, so what goes live is what the current source produces.
+
+Cloudflare needs wrangler, which is a Node program — and Cloudflare does not
+support the bun runtime. irgo downloads its own Node into ~/.irgo rather than
+asking you to install one, and irgo tools remove takes it away again. A working
+node already on PATH is used instead.
+
+Credentials:
+  CLOUDFLARE_API_TOKEN   required in CI
+                         From a terminal, wrangler opens a browser instead.
+
+The Worker's name and any bindings come from wrangler.toml, which is yours
+after irgo seeds it.`,
+	})
+}

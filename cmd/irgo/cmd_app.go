@@ -246,6 +246,11 @@ func uninstallDesktopApp() error {
 // the router so the router stays a table of what exists.
 
 func runAppBuild(target string, args []string) error {
+	// A target that registered itself dispatches itself. Anything else falls
+	// through to the platforms this file has always known about.
+	if err, ok := runTarget("app build", target, args); ok {
+		return err
+	}
 	if target == "desktop" {
 		platform := ""
 		for _, a := range args[1:] {
@@ -273,6 +278,9 @@ func runAppRun(target string, args []string) error {
 	// after the first token: the target is a bare word and every flag is
 	// dashed, so there is nothing to strip, and stripping blindly ate the
 	// first flag whenever the target was written after it.
+	if err, ok := runTarget("app run", target, args); ok {
+		return err
+	}
 	rest := args
 	devMode := hasFlag(rest, "--dev", "-d")
 	if target == "desktop" {
@@ -297,4 +305,62 @@ func runAppRun(target string, args []string) error {
 
 func runAppPackage(args []string) error {
 	return packageCommand(args)
+}
+
+func init() {
+	register(command{
+		noun: "app", verb: "run", order: 10,
+		summary: "Build and launch it",
+		targets: []string{"ios", "android", "desktop"},
+		usage: [][2]string{
+			{"ios", "iOS Simulator"},
+			{"ios --device", "A USB-connected iPhone"},
+			{"android", "Android emulator"},
+			{"desktop", "Native desktop window"},
+		},
+		flags: [][2]string{
+			{"--dev, -d", "Hot reload: serve from the dev server on :8080 and reload on save"},
+			{"--device, -D", "A real iPhone rather than the Simulator"},
+			{"--team <id>", "Apple Team ID to sign with"},
+			{"--built, -b", "Desktop: launch the existing build rather than rebuilding"},
+		},
+		notes: `Android uses whatever device or emulator is already connected, and only boots
+its own when nothing is. To run a particular AVD, start it first — there is no
+flag to disagree with what is actually attached.
+
+On Linux, ios deploys to a USB/network-connected physical device via xtool
+(https://xtool.sh) instead of the Simulator. With --dev the device connects
+to the dev server over your LAN; IRGO_DEV_SERVER=http://<host>:8080 overrides
+the URL.`,
+	})
+}
+
+func init() {
+	register(command{
+		noun: "app", verb: "install", order: 40,
+		summary: "Install a build — no rebuild",
+		targets: []string{"ios", "android", "desktop"},
+		usage: [][2]string{
+			{"ios", "Onto the running Simulator"},
+			{"android", "Onto the connected device or emulator"},
+			{"desktop", "Into /Applications (macOS)"},
+		},
+		notes: `Installs the existing artifact and does not rebuild. Build first if there is
+nothing there yet.`,
+	})
+}
+
+func init() {
+	register(command{
+		noun: "app", verb: "remove", order: 50,
+		summary: "Uninstall it again",
+		targets: []string{"ios", "android", "desktop"},
+		usage: [][2]string{
+			{"ios", "From the Simulator"},
+			{"android", "From the device or emulator"},
+			{"desktop", "From /Applications"},
+		},
+		notes: `The exact inverse of irgo app install. Every install irgo performs can be
+undone by irgo, so nothing it puts on a machine has to be hunted down by hand.`,
+	})
 }

@@ -187,3 +187,46 @@ func runCommandQuiet(name string, args ...string) (string, error) {
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
+
+// moduleDir is where `go get` put a module, or "" if it is not a dependency.
+//
+// This is how anything reaches what ships inside a module — a kit's
+// stylesheets, a skill, an example's assets — without a download or a second
+// version to keep in step with go.mod's.
+func moduleDir(mod string) string {
+	out, err := exec.Command(goBin(), "list", "-m", "-f", "{{.Dir}}", mod).Output()
+	if err != nil {
+		return ""
+	}
+	dir := strings.TrimSpace(string(out))
+	if dir == "" {
+		return ""
+	}
+	if _, err := os.Stat(dir); err != nil {
+		return ""
+	}
+	return dir
+}
+
+// copyGenerated writes src to dst unless dst already matches.
+//
+// Compared by content, not size or modification time. An upgrade that leaves a
+// file the same length — a colour changed, a selector renamed — would be
+// skipped by a size check, and the module cache stamps its own files when it
+// extracts them, so times say nothing.
+//
+// 0644 rather than the source's mode: the module cache is read-only, and
+// copying that through gives a project files it cannot overwrite next build.
+func copyGenerated(src, dst string) error {
+	want, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	if have, err := os.ReadFile(dst); err == nil && bytes.Equal(have, want) {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(dst, want, 0o644)
+}

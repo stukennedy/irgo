@@ -149,15 +149,6 @@ func route(noun, verb string, args []string) (error, bool) {
 	return nil, false
 }
 
-// nounVerbs lists what each noun accepts, so an unknown verb is answered with
-// the alternatives rather than the whole CLI.
-var nounVerbs = map[string][]string{
-	"project": {"new", "clean", "upgrade", "pin", "ci", "assets", "test", "config"},
-	"app":     {"build", "run", "package", "deploy", "install", "remove", "reviews"},
-	"tools":   {"install", "remove", "doctor"},
-	"server":  {"dev", "serve"},
-}
-
 // appValueFlags are the flags that consume the argument after them, so a
 // target search does not mistake a flag's value for the platform.
 var appValueFlags = map[string]bool{"--team": true}
@@ -201,14 +192,3 @@ var renamed = map[string]string{
 
 	"ios": "app build ios, or project config ios.team",
 }
-
-// buildTargets is what `app build` accepts, read from its declaration so the
-// dispatch, the help and the README cannot disagree about it.
-var buildTargets = commands["app build"].targets
-
-// targetList renders a verb's targets for a usage line.
-func targetList(nounVerb string) string {
-	return strings.Join(commands[nounVerb].targets, "|")
-}
-
-func buildTargetList() string { return targetList("app build") }

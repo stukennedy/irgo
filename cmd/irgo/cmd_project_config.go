@@ -242,3 +242,22 @@ func envForConfigKey(key string) string {
 	}
 	return ""
 }
+
+func init() {
+	register(command{
+		noun: "project", verb: "config", order: 70,
+		summary: "Show or set a setting (signing, stores, version)",
+		args:    "[<key>] [<value>]",
+		usage: [][2]string{
+			{"", "Every setting, its value, and where it came from"},
+			{"<key>", "One setting"},
+			{"<key> <value>", "Set it"},
+		},
+		notes: `Settings live in irgo.package.toml. Precedence: environment variable, then
+irgo.package.local.toml (gitignored), then irgo.package.toml.
+
+Secrets belong in the local file or the environment — irgo.package.toml is
+committed. Values you have to discover rather than type, such as which signing
+teams exist, are reported by irgo tools doctor.`,
+	})
+}
