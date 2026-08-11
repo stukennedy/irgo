@@ -99,6 +99,32 @@ func runUpgrade(force, showDiff bool) error {
 			return nil
 		}
 
+		// .gitignore is both, so it is merged rather than replaced.
+		//
+		// It is framework-owned because irgo decides which generated paths
+		// exist, and every upgrade that adds one has to add its rule. It is
+		// also a file projects legitimately write in — a build output of their
+		// own, an editor directory, a decision worth a comment.
+		//
+		// Overwriting served the first and silently destroyed the second. It
+		// happened here: an upgrade removed a project's note explaining why
+		// tokibundle/ is committed while correctly adding ios/App/, and the
+		// only trace was a .irgo-bak nobody reads.
+		if rel == ".gitignore" && herr == nil {
+			merged, added := mergeGitignore(string(have), body)
+			if added == 0 {
+				unchanged++
+				return nil
+			}
+			if err := os.WriteFile(rel, []byte(merged), 0o644); err != nil {
+				failed = append(failed, fmt.Sprintf("%s: %v", rel, err))
+				return nil
+			}
+			fmt.Printf("  updated: %s  (%d rule(s) added, yours kept)\n", rel, added)
+			updated++
+			return nil
+		}
+
 		if !isFrameworkOwned(rel) && herr == nil && !force {
 			// Seeded once, yours since. Report rather than overwrite.
 			drifted = append(drifted, rel)
