@@ -20,6 +20,7 @@
 package datastarjs
 
 import (
+	"bytes"
 	_ "embed"
 	"net/http"
 	"strconv"
@@ -34,7 +35,32 @@ import (
 const Version = "v1.0.2"
 
 //go:embed datastar.js
-var script []byte
+var embedded []byte
+
+// script is the bundle with its source-map reference removed.
+//
+// The bundle ends with a //# sourceMappingURL=datastar.js.map comment, and the
+// map is not distributed — Datastar does not publish it and it is not vendored
+// here. A browser only fetches a map when devtools are open, so the dangling
+// reference is invisible in normal use and every irgo project has been serving
+// it. It is not invisible to everything: a headless browser that resolves the
+// comment eagerly fails to compile the whole client, which is how this was
+// found.
+var script = stripSourceMap(embedded)
+
+func stripSourceMap(b []byte) []byte {
+	const marker = "//# sourceMappingURL="
+	i := bytes.LastIndex(b, []byte(marker))
+	if i < 0 {
+		return b
+	}
+	// Keep anything after the comment's line, in case it is not last.
+	rest := b[i:]
+	if nl := bytes.IndexByte(rest, '\n'); nl >= 0 {
+		return append(bytes.Clone(b[:i]), rest[nl+1:]...)
+	}
+	return bytes.TrimRight(b[:i], "\n\r\t ")
+}
 
 // Script returns the Datastar client source, for builds that embed it rather
 // than serve it — the mobile shells read it through the same bridge as

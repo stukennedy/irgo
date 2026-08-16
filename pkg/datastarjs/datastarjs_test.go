@@ -62,3 +62,17 @@ func TestGoAndClientAgreeOnTheWireFormat(t *testing.T) {
 		}
 	}
 }
+
+// TestServedClientHasNoDanglingSourceMap — the bundle ships with a
+// //# sourceMappingURL comment and the map is not distributed with it. A
+// browser only resolves that when devtools are open, so every generated
+// project served a dead reference without anyone noticing. Anything that
+// resolves it eagerly fails to compile the client at all.
+func TestServedClientHasNoDanglingSourceMap(t *testing.T) {
+	if strings.Contains(string(Script()), "sourceMappingURL") {
+		t.Error("the served client still references a source map that is not shipped")
+	}
+	if !strings.Contains(string(Script()), "datastar") {
+		t.Error("stripping the source map appears to have eaten the bundle")
+	}
+}
