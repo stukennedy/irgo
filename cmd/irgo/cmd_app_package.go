@@ -526,3 +526,42 @@ func packageCommand(args []string) error {
 	}
 	return nil
 }
+
+func init() {
+	register(command{
+		noun: "app", verb: "package", order: 20,
+		summary: "Store artifacts",
+		targets: []string{"ios", "android", "macos", "windows"},
+		usage: [][2]string{
+			{"ios", "Signed .ipa"},
+			{"android", "Signed .aab"},
+			{"macos", "Signed .app, notarized; --dmg for a disk image"},
+			{"windows", ".msix"},
+			{"setup --check", "What each store needs, and what is missing"},
+		},
+		flags: [][2]string{
+			{"--team <id>", "iOS: Apple Team ID"},
+			{"--export-method <m>", "iOS: app-store, ad-hoc or development"},
+			{"--keystore <path>", "Android: signing keystore"},
+			{"--keystore-pass <s>", "Android: keystore password"},
+			{"--key-alias <s>", "Android: key alias"},
+			{"--key-pass <s>", "Android: key password"},
+			{"--identity <cert>", "macOS: Developer ID Application certificate"},
+			{"--notarize", "macOS: notarize the build"},
+			{"--apple-id <email>", "macOS: Apple ID for notarization"},
+			{"--password <s>", "macOS: app-specific password"},
+			{"--dmg", "macOS: also produce a disk image"},
+			{"--publisher <dn>", "Windows: publisher DN"},
+			{"--cert <pfx>", "Windows: code-signing certificate"},
+			{"--cert-pass <s>", "Windows: certificate password"},
+			{"--version <v>", "Override common.version"},
+			{"--icon <path>", "Override the source icon"},
+			{"--output, -o", "Where to write the artifact"},
+		},
+		notes: `Every signing setting can be given on the command line as well as in
+irgo.package.toml, which is how CI supplies secrets without writing them to
+disk. Missing credentials are reported before the build rather than at the end
+of it, and assets are regenerated first so a package cannot ship a stale
+stylesheet.`,
+	})
+}

@@ -20,19 +20,7 @@ Usage:
 
 One grammar throughout: every command is a noun and a verb.
 
-PROJECT   the repository you are in
-` + renderNounSection("project") + `
-
-APP       what gets built, run, shipped and installed
-` + renderNounSection("app") + `
-
-TOOLS     the toolchains on this machine
-` + renderNounSection("tools") + `
-
-SERVER    the development server
-` + renderNounSection("server") + `
-
-  version                  Print version information
+` + renderNounSections() + `  version                  Print version information
   help [command]           Detail for one command
 
 Examples:
@@ -59,18 +47,24 @@ needs them, and go.mod pins the CLI so ` + "`go tool irgo`" + ` always matches t
 func printCommandHelp(noun, verb string) {
 	key := strings.TrimSpace(noun + " " + verb)
 
-	if c, ok := commands[key]; ok {
+	if c, ok := lookup(key); ok {
 		printCommand(key, c)
 		return
 	}
 
-	switch key {
-	case "project", "app", "tools", "server":
+	// A noun on its own lists its verbs. Checked against the registry rather
+	// than a list written out here: a noun a feature adds — `ui`, when a
+	// component kit is wired in — would otherwise fall through to "no help",
+	// while its verbs worked perfectly.
+	if verb == "" && len(nounVerbs(noun)) > 0 {
 		fmt.Printf("irgo %s - %s\n\n", noun, nounSummary[noun])
 		fmt.Println("Verbs:")
 		fmt.Println(renderNounVerbs(noun, "irgo "))
 		fmt.Printf("\nDetail for one:  irgo help %s <verb>\n", noun)
+		return
+	}
 
+	switch key {
 	case "version":
 		fmt.Println(`irgo version - Print the version
 
@@ -125,6 +119,33 @@ func printCommand(key string, c command) {
 	}
 }
 
+// renderNounSections writes the usage index, one block per noun.
+//
+// Derived rather than five hardcoded blocks. A noun added by a feature — `ui`,
+// when a UI kit is wired in — appeared in its own help and in nothing else,
+// because the front page listed the nouns it happened to be written with. That
+// is the same coupling the command table had, one level up.
+//
+// A noun with nothing registered is skipped, so a noun declared ahead of the
+// feature that fills it does not print an empty heading.
+func renderNounSections() string {
+	var b strings.Builder
+	for _, noun := range nouns {
+		verbs := nounVerbs(noun)
+		if len(verbs) == 0 {
+			continue
+		}
+		b.WriteString(strings.ToUpper(noun))
+		for i := len(noun); i < 10; i++ {
+			b.WriteString(" ")
+		}
+		b.WriteString(nounSummary[noun] + "\n")
+		b.WriteString(renderNounSection(noun))
+		b.WriteString("\n\n")
+	}
+	return b.String()
+}
+
 // nounSummary is the one-line description of each noun, used when help is
 // asked for a noun rather than a command.
 var nounSummary = map[string]string{
@@ -132,6 +153,7 @@ var nounSummary = map[string]string{
 	"app":     "what gets built, run, shipped and installed",
 	"tools":   "the toolchains on this machine",
 	"server":  "the development server",
+	"ui":      "the component kit, when a project uses one",
 }
 
 // renderCommandTable writes the command reference that ships in the generated
@@ -139,10 +161,10 @@ var nounSummary = map[string]string{
 func renderCommandTable() string {
 	var b strings.Builder
 	b.WriteString("| Command | What it does |\n|---|---|\n")
-	for _, noun := range []string{"project", "app", "tools", "server"} {
-		for _, verb := range nounVerbs[noun] {
+	for _, noun := range nouns {
+		for _, verb := range nounVerbs(noun) {
 			key := noun + " " + verb
-			c := commands[key]
+			c, _ := lookup(key)
 			name := key
 			if len(c.targets) > 0 {
 				name += " <" + strings.Join(c.targets, "|") + ">"
@@ -163,8 +185,8 @@ func renderNounVerbs(noun, prefix string) string {
 	type row struct{ left, right string }
 	var rows []row
 	width := 0
-	for _, verb := range nounVerbs[noun] {
-		c := commands[noun+" "+verb]
+	for _, verb := range nounVerbs(noun) {
+		c, _ := lookup(noun + " " + verb)
 		left := prefix + noun + " " + verb
 		if len(c.targets) > 0 {
 			left += " <" + strings.Join(c.targets, "|") + ">"
@@ -210,9 +232,9 @@ func printCommandsJSON() {
 	}
 
 	var out []commandDoc
-	for _, noun := range []string{"project", "app", "tools", "server"} {
-		for _, verb := range nounVerbs[noun] {
-			c := commands[noun+" "+verb]
+	for _, noun := range nouns {
+		for _, verb := range nounVerbs(noun) {
+			c, _ := lookup(noun + " " + verb)
 			d := commandDoc{
 				Noun: noun, Verb: verb, Summary: c.summary,
 				Targets: c.targets, Args: c.args, Notes: c.notes,

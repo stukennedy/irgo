@@ -560,3 +560,29 @@ func scaffoldExampleDir(rel, projectName, modulePath string) error {
 	fmt.Printf("  scaffolded %d files into %s\n", written, rel)
 	return nil
 }
+
+func init() {
+	register(command{
+		noun: "project", verb: "new", order: 0,
+		summary: "Create a project, or regenerate this one",
+		args:    "<name>",
+		usage: [][2]string{
+			{"<name>", "Create ./<name>"},
+			{".", "Generate into the current directory"},
+			{"--check", "Report what regenerating would change, write nothing"},
+		},
+		notes: `What it writes:
+  main.go, handlers/, templates/, static/   your app
+  ios/, android/                            native shells
+  .github/workflows/                        CI for every target
+  go.mod                                    pins the CLI via a tool directive
+
+Files that are yours are seeded once and never overwritten: go.mod, README.md,
+irgo.package.toml and appicon.png. Everything else is regenerated, so fix the
+template rather than the generated copy.
+
+--check exits non-zero if regenerating would change a file. That asserts the
+repo IS unmodified CLI output, which is true of example repos and not of a real
+app — for those, use irgo project upgrade --check.`,
+	})
+}

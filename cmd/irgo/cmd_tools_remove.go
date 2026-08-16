@@ -259,3 +259,26 @@ func dirSizeNote(path string) string {
 	}
 	return ""
 }
+
+func init() {
+	register(command{
+		noun: "tools", verb: "remove", order: 10,
+		summary: "Undo it — shows what it will delete, and asks",
+		args:    "[android] [--all] [--yes]",
+		usage: [][2]string{
+			{"", "What irgo installed for this host"},
+			{"android", "The Android toolchain"},
+			{"--all", "Everything, including the SDK and AVDs"},
+		},
+		flags: [][2]string{
+			{"--all", "Everything irgo installed, including the SDK and AVDs"},
+			{"--keep-jdk", "Leave the managed JDK in place"},
+			{"--yes, -y", "Do not ask"},
+		},
+		notes: `Shows what it will delete, with sizes, and asks first. Outside a terminal it
+refuses rather than assuming yes.
+
+Only what irgo installed is removed: each install leaves a marker, and anything
+without one is left alone, so a toolchain you set up yourself survives.`,
+	})
+}

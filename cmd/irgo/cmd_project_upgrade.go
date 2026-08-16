@@ -381,3 +381,26 @@ func migrateDatastar() {
 		}
 	}
 }
+
+func init() {
+	register(command{
+		noun: "project", verb: "upgrade", order: 20,
+		summary: "Take framework updates, leaving your code alone",
+		args:    "[--check|--diff|--force]",
+		usage: [][2]string{
+			{"", "Refresh framework-owned scaffolding"},
+			{"--check", "Name what an upgrade would overwrite, change nothing"},
+			{"--diff", "Also show what the template holds for your files"},
+			{"--force", "Overwrite your files too (destructive)"},
+		},
+		notes: `Framework-owned (replaced): ios/, android/, mobile/, .air.toml, .gitignore,
+CLAUDE.md, AGENTS.md, and the generated workflows.
+Yours (never rewritten):    main.go, handlers/, templates/, static/, README.md,
+                            go.mod, irgo.package.toml, appicon.png.
+
+Anything overwritten is copied to <file>.irgo-bak first.
+
+--check is the CI-friendly form: it exits non-zero when a framework-owned file
+has been hand-edited, i.e. when an upgrade is about to discard that edit.`,
+	})
+}

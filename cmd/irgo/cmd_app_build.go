@@ -647,3 +647,39 @@ func mobileCloneUsable(dir string) bool {
 	out, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
 	return err == nil && strings.TrimSpace(string(out)) == pinXMobile
 }
+
+func init() {
+	register(command{
+		noun: "app", verb: "build", order: 0,
+		summary: "Build it",
+		targets: []string{"ios", "android", "desktop", "cloudflare", "all"},
+		usage: [][2]string{
+			{"ios", "Device framework (Irgo.xcframework)"},
+			{"ios --sim", "Simulator build"},
+			{"ios --device", "Build and sign for a USB device"},
+			{"android", "AAR for the native shell"},
+			{"desktop", "This host"},
+			{"desktop <goos>", "linux, darwin or windows"},
+			{"cloudflare", "A Cloudflare Worker (WASM) in build/worker"},
+			{"all", "Everything this host can produce"},
+		},
+		flags: [][2]string{
+			{"--sim, -s", "Simulator rather than device (iOS)"},
+			{"--device, -D", "A real device (iOS)"},
+			{"--team <id>", "Apple Team ID to sign with"},
+		},
+		notes: `Cloudflare compiles the same router to WebAssembly and serves it from a
+Worker, SSE included. Shared state cannot live in a Go variable there — every
+request gets a fresh runtime — so keep it in a KV, D1 or Durable Object
+binding. Per-connection state within one SSE stream is fine.
+
+Toolchains install themselves: the Android SDK, NDK, JDK and gomobile are
+provisioned on first use. Cross-building is limited by the host — macOS can
+produce macOS and Windows desktop binaries, Linux only Linux. Ask irgo tools
+doctor what this machine can do.
+
+On Linux, ios builds the device slice (ios-arm64) with the xtool Darwin SDK
+(https://xtool.sh) instead of Xcode, and copies the framework into the
+ios/App SwiftPM project. --sim and --device still need macOS.`,
+	})
+}

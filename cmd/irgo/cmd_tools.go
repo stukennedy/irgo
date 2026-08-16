@@ -40,8 +40,7 @@ func goToolPkg(name string) string {
 	case "templ":
 		// The project's own templ version first: the generator and the runtime
 		// package have to agree, or generated code fails to compile against
-		// the library. Falling back to @latest made that disagreement possible
-		// whenever the version could not be read.
+		// the library.
 		if v := templVersionFromGoMod(); v != "" {
 			return "github.com/a-h/templ/cmd/templ@v" + v
 		}
@@ -50,11 +49,6 @@ func goToolPkg(name string) string {
 		return "github.com/air-verse/air@" + pinAir
 	case "gomobile", "gobind":
 		// Same commit as the x/mobile checkout gomobile builds against.
-		// Installing @latest while pinning the source is how a tool ends up
-		// disagreeing with the code it drives: gomobile started requiring
-		// golang.org/x/mobile in the project's dependency graph, and every
-		// mobile build broke with no commit in this repository or the
-		// project's.
 		return "golang.org/x/mobile/cmd/" + name + "@" + pinXMobile
 	}
 	return ""
@@ -251,6 +245,10 @@ func ensureAssets() error {
 	if err := runTempl(); err != nil {
 		return err
 	}
+	// Whatever features have registered, between the templates and the CSS.
+	if err := runAssetSteps(); err != nil {
+		return err
+	}
 	return runCSS()
 }
 
@@ -408,4 +406,40 @@ func pruneIrgoStateDir() {
 	// condition we want — never delete state that is still in use.
 	_ = os.Remove(irgoToolsDir())
 	_ = os.Remove(filepath.Join(homeDir(), ".irgo"))
+}
+
+func init() {
+	register(command{
+		noun: "project", verb: "assets", order: 50,
+		summary: "Regenerate templ + Tailwind (builds do this already)",
+		usage:   [][2]string{{"", "Write _templ.go and static/css/output.css"}},
+		notes: "Both are gitignored and compiled into the binary, so a plain `go build` needs\n" +
+			`this first; every irgo build and run does it for you.
+
+templ and the Tailwind standalone binary are installed on demand. There is no
+Node, npm or package.json.`,
+	})
+}
+
+func init() {
+	register(command{
+		noun: "tools", verb: "install", order: 0,
+		summary: "Provision what builds need",
+		args:    "[android] [--emulator]",
+		usage: [][2]string{
+			{"", "Everything this host can use"},
+			{"android", "SDK, NDK, JDK 17 and gomobile"},
+			{"android --emulator", "Also a system image and an AVD"},
+			{"android --avd <name>", "Name that AVD (default \"irgo\")"},
+		},
+		flags: [][2]string{
+			{"--emulator, -e", "Also install a system image and an AVD"},
+			{"--avd <name>", "Name the AVD"},
+		},
+		notes: `Everything lands under ~/.irgo or the Android SDK home — no system package
+manager, on any OS. Running it again installs only what is missing.
+
+You rarely need this: a build provisions what it needs. It exists so a large
+download can be done deliberately rather than in the middle of a build.`,
+	})
 }

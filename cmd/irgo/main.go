@@ -130,7 +130,7 @@ func main() {
 		var handled bool
 		err, handled = route(noun, verb, rest)
 		if !handled {
-			if verbs, ok := nounVerbs[noun]; ok {
+			if verbs := nounVerbs(noun); len(verbs) > 0 {
 				if verb == "" {
 					err = fmt.Errorf("usage: irgo %s <%s>", noun, strings.Join(verbs, "|"))
 				} else {

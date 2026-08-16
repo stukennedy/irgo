@@ -118,3 +118,20 @@ func removeTemplGenerated() (int, error) {
 	})
 	return n, err
 }
+
+func init() {
+	register(command{
+		noun: "project", verb: "clean", order: 10,
+		summary: "Remove generated output",
+		args:    "[--all]",
+		usage: [][2]string{
+			{"", "Generated code and build output"},
+			{"--all", "Also the scaffolded native shells"},
+		},
+		notes: `Removes _templ.go, static/css/output.css, build/, tmp/ and dist/. With --all,
+ios/Example and android/Example go too; they are scaffolded again on the next
+build, which takes a gomobile rebuild.
+
+Nothing you wrote is touched.`,
+	})
+}

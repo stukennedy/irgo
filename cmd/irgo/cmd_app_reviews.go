@@ -162,3 +162,24 @@ func shortDate(rfc3339 string) string {
 func epochToRFC3339(sec int64) string {
 	return time.Unix(sec, 0).UTC().Format(time.RFC3339)
 }
+
+func init() {
+	register(command{
+		noun: "app", verb: "reviews", order: 60,
+		summary: "Monitor store reviews",
+		targets: []string{"ios", "mac", "android"},
+		usage: [][2]string{
+			{"<store>", "Fetch reviews"},
+			{"ios --new", "Only ones you have not seen"},
+			{"ios --reply <id> --text \"...\"", "Reply to one"},
+		},
+		flags: [][2]string{
+			{"--limit <n>", "How many to fetch"},
+			{"--new", "Only ones you have not seen"},
+			{"--reply <id>", "Reply to one review"},
+			{"--text \"...\"", "The reply body"},
+		},
+		notes: `Needs the store credentials in irgo.package.toml under [reviews] — see
+irgo project config.`,
+	})
+}

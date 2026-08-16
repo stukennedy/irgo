@@ -34,7 +34,8 @@ func captureStdout(t *testing.T, f func()) string {
 // two: commands were renamed and the help kept describing the old ones, down to
 // files that no longer shipped.
 func TestEveryCommandHasHelp(t *testing.T) {
-	for noun, verbs := range nounVerbs {
+	for _, noun := range nouns {
+		verbs := nounVerbs(noun)
 		for _, verb := range verbs {
 			out := captureStdout(t, func() { printCommandHelp(noun, verb) })
 			if strings.Contains(out, "No help for") {
@@ -56,7 +57,8 @@ func TestEveryCommandHasHelp(t *testing.T) {
 // TestHelpForANounListsItsVerbs checks the middle level: `irgo help app` should
 // answer with app's verbs rather than falling through to the whole CLI.
 func TestHelpForANounListsItsVerbs(t *testing.T) {
-	for noun, verbs := range nounVerbs {
+	for _, noun := range nouns {
+		verbs := nounVerbs(noun)
 		out := captureStdout(t, func() { printCommandHelp(noun, "") })
 		for _, verb := range verbs {
 			if !strings.Contains(out, "irgo "+noun+" "+verb) {
@@ -75,7 +77,8 @@ func TestHelpForANounListsItsVerbs(t *testing.T) {
 // people read, that was wrong.
 func TestUsageIndexListsEveryCommand(t *testing.T) {
 	out := captureStdout(t, printUsage)
-	for noun, verbs := range nounVerbs {
+	for _, noun := range nouns {
+		verbs := nounVerbs(noun)
 		for _, verb := range verbs {
 			if !strings.Contains(out, noun+" "+verb) {
 				t.Errorf("irgo help does not mention %q on its front page", noun+" "+verb)
@@ -105,7 +108,14 @@ func TestEveryDeclaredBuildTargetIsDispatched(t *testing.T) {
 		}
 		body += string(src)
 	}
-	for _, target := range buildTargets {
+	for _, target := range buildTargets() {
+		// Either a target registered its own handler, or one of the two
+		// dispatchers names it. Source text alone stopped being the whole
+		// answer once targets could dispatch themselves — and a test that only
+		// reads source would call a self-registering target undispatched.
+		if _, ok := targetRuns["app build "+target]; ok {
+			continue
+		}
 		if strings.Contains(body, `case "`+target+`"`) || strings.Contains(body, `== "`+target+`"`) {
 			continue
 		}
@@ -118,7 +128,8 @@ func TestEveryDeclaredBuildTargetIsDispatched(t *testing.T) {
 // README all read commands.go, so a verb missing from it renders as three
 // blanks and errors in none of them.
 func TestEveryVerbIsDeclared(t *testing.T) {
-	for noun, verbs := range nounVerbs {
+	for _, noun := range nouns {
+		verbs := nounVerbs(noun)
 		for _, verb := range verbs {
 			c, ok := commands[noun+" "+verb]
 			if !ok {
@@ -152,7 +163,8 @@ func TestEveryFlagIsDocumented(t *testing.T) {
 	}
 
 	help := captureStdout(t, printUsage)
-	for noun, verbs := range nounVerbs {
+	for _, noun := range nouns {
+		verbs := nounVerbs(noun)
 		help += captureStdout(t, func() { printCommandHelp(noun, "") })
 		for _, verb := range verbs {
 			help += captureStdout(t, func() { printCommandHelp(noun, verb) })
@@ -336,5 +348,88 @@ func TestNoUnpinnedDatastarCDN(t *testing.T) {
 			}
 			return nil
 		})
+	}
+}
+
+// TestEveryCommandHasARenderedNoun — a command registers itself from the file
+// that implements it, so nothing checks its noun at the point of declaration.
+//
+// A noun outside `nouns` registers fine, dispatches fine, and appears in no
+// help at all: the index iterates nouns, so the command exists and is
+// undiscoverable. That is the cost of decentralising the table, and this is
+// what pays it.
+func TestEveryCommandHasARenderedNoun(t *testing.T) {
+	known := map[string]bool{}
+	for _, n := range nouns {
+		known[n] = true
+	}
+	for key, c := range commands {
+		if !known[c.noun] {
+			t.Errorf("%q declares noun %q, which is not in `nouns` — it would "+
+				"dispatch but never appear in the usage index or the README",
+				key, c.noun)
+		}
+		if c.verb == "" {
+			t.Errorf("%q registered with an empty verb", key)
+		}
+	}
+}
+
+// TestNounVerbsIsStable — ordering comes from the order field, not from the
+// order init happened to run in, which is filename order and changes when a
+// file is renamed.
+func TestNounVerbsIsStable(t *testing.T) {
+	for _, noun := range nouns {
+		first := nounVerbs(noun)
+		for i := 0; i < 5; i++ {
+			again := nounVerbs(noun)
+			if len(first) != len(again) {
+				t.Fatalf("%s: unstable length", noun)
+			}
+			for j := range first {
+				if first[j] != again[j] {
+					t.Fatalf("%s: order changed between calls: %v vs %v", noun, first, again)
+				}
+			}
+		}
+	}
+}
+
+// TestTheCommandSetIsWhatWeThinkItIs — every command, listed once, so losing
+// one is a test failure rather than a quiet absence.
+//
+// This is the cost of letting commands register themselves: a declaration that
+// is dropped — by a bad rebase, a deleted init, a file moved without it — does
+// not fail anything. The command simply is not there. nounVerbs is derived
+// from what registered, so it agrees; the help is consistent; every other test
+// passes. It happened while rebasing this very change, and `irgo project pin`
+// vanished with nothing to say so.
+//
+// A list in a test is not the central table this replaced. It asserts rather
+// than defines, and changing it is the deliberate act that adding or removing
+// a command should be.
+func TestTheCommandSetIsWhatWeThinkItIs(t *testing.T) {
+	want := []string{
+		"project new", "project clean", "project upgrade", "project pin",
+		"project ci", "project assets", "project test", "project config",
+		"app build", "app run", "app package", "app deploy",
+		"app install", "app remove", "app reviews",
+		"tools install", "tools remove", "tools doctor",
+		"server dev", "server serve",
+	}
+	have := map[string]bool{}
+	for k := range allCommands() {
+		have[k] = true
+	}
+	for _, k := range want {
+		if !have[k] {
+			t.Errorf("%q is not registered — its init was lost, and nothing else "+
+				"would have noticed", k)
+		}
+		delete(have, k)
+	}
+	for k := range have {
+		t.Errorf("%q is registered but not in this list. If it is new, add it "+
+			"here; that is the point of the list", k)
 	}
 }
