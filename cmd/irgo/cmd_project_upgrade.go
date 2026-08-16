@@ -16,6 +16,9 @@ package main
 
 import (
 	"fmt"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -227,7 +230,47 @@ func renderTemplate(body, projectName, modulePath, replace string) string {
 	body = strings.ReplaceAll(body, "{{GO_VERSION}}", scaffoldGoVersion())
 	body = strings.ReplaceAll(body, "{{REPLACE_DIRECTIVE}}", replace)
 	body = strings.ReplaceAll(body, "{{COMMANDS}}", renderCommandTable())
-	return body
+	return gofmtIfGo(body)
+}
+
+// gofmtIfGo formats a rendered template when what came out is Go, and returns
+// it untouched when it is not.
+//
+// Import order is the reason. gofmt sorts a block alphabetically, and a
+// scaffolded file imports both the framework and the new project:
+//
+//	"github.com/stukennedy/irgo/desktop"
+//	"todo/app"
+//
+// Which of those sorts first depends on the module name, and the module name
+// arrives at scaffold time — so there is no order the template can be written
+// in that is correct for every project. `todo` sorts after `github.com/…` and
+// `alpha` sorts before it. Whatever the template picks is wrong for half the
+// names someone might choose.
+//
+// The result was that every project irgo generated failed `gofmt -l` on the
+// files the developer had not written yet, including upstream's own todo
+// example, which is checked in unformatted for exactly this reason.
+//
+// Here rather than at the call sites because `project check` and `project
+// upgrade` compare this output against the file on disk. If `new` formatted and
+// they did not, every scaffolded Go file would report as modified on a project
+// nobody had touched — the same drift the three copies of the placeholder list
+// used to cause, which is why they were merged into this function.
+//
+// Non-Go bodies select themselves out: go.mod, README.md and the Gradle files
+// do not parse, so format.Source fails and the original is returned. The parse
+// check first is what stops a stray text file that happens to be valid Go from
+// being reformatted behind someone's back.
+func gofmtIfGo(body string) string {
+	if _, err := parser.ParseFile(token.NewFileSet(), "", body, parser.PackageClauseOnly); err != nil {
+		return body
+	}
+	out, err := format.Source([]byte(body))
+	if err != nil {
+		return body
+	}
+	return string(out)
 }
 
 // printTemplateDiff shows what the template holds for a file you own, so an

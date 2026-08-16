@@ -19,8 +19,8 @@ package mobile
 import (
 	"fmt"
 
-	"todo/app"
 	irgomobile "github.com/stukennedy/irgo/mobile"
+	"todo/app"
 )
 
 // Initialize sets up the mobile bridge and app routes.
@@ -91,7 +91,7 @@ type streamCallbackAdapter struct{ cb StreamCallback }
 func (a streamCallbackAdapter) OnResponse(status int, headersJSON string) {
 	a.cb.OnResponse(status, headersJSON)
 }
-func (a streamCallbackAdapter) OnChunk(chunk []byte)          { a.cb.OnChunk(chunk) }
+func (a streamCallbackAdapter) OnChunk(chunk []byte)           { a.cb.OnChunk(chunk) }
 func (a streamCallbackAdapter) OnComplete(errorMessage string) { a.cb.OnComplete(errorMessage) }
 
 // HandleRequestStream processes an HTTP request, streaming the response
