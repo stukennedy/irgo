@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -139,7 +140,108 @@ func runCSS() error {
 		return err
 	}
 	fmt.Println("Building CSS...")
-	return runCommand(bin, "-i", in, "-o", out, "--minify")
+
+	// Components can come from a dependency, and Tailwind only scans the
+	// project. Without this they render with classes no stylesheet defines —
+	// the markup is right and the page is unstyled, which looks like a broken
+	// component rather than a missing scan path.
+	entry, cleanup, err := cssEntryWithDependencySources(in)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	return runCommand(bin, "-i", entry, "-o", out, "--minify")
+}
+
+// cssEntryWithDependencySources returns a Tailwind entry point that also scans
+// any dependency the project imports templ components from.
+//
+// Scoped to the packages actually imported, not the whole module. That is the
+// difference between a stylesheet carrying what this project uses and one
+// carrying every component a library ships:
+//
+//	no scanning          14 KB
+//	one imported package 15 KB
+//	the whole module    250 KB
+//
+// The generated entry is a temporary file rather than an edit to input.css:
+// that file belongs to the project, and paths resolved from a module cache are
+// machine- and version-specific — committing them would break on the next
+// machine and on every upgrade.
+func cssEntryWithDependencySources(in string) (path string, cleanup func(), err error) {
+	noop := func() {}
+
+	dirs, err := templComponentDirs()
+	if err != nil || len(dirs) == 0 {
+		return in, noop, nil // nothing outside the project; use it as-is
+	}
+
+	original, err := os.ReadFile(in)
+	if err != nil {
+		return "", noop, err
+	}
+	return writeCSSEntry(in, original, dirs)
+}
+
+// writeCSSEntry writes the scan paths ahead of the project's own stylesheet.
+//
+// A temporary file rather than an edit to input.css: that file belongs to the
+// project, and a module cache path carries both the machine and the exact
+// version — committing one would break on the next machine and on every
+// upgrade.
+func writeCSSEntry(in string, original []byte, dirs []string) (string, func(), error) {
+	noop := func() {}
+
+	var b strings.Builder
+	for _, d := range dirs {
+		fmt.Fprintf(&b, "@source %q;\n", d)
+	}
+	b.Write(original)
+
+	// Beside input.css, so the relative @import paths inside it still resolve.
+	f, err := os.CreateTemp(filepath.Dir(in), ".irgo-tailwind-*.css")
+	if err != nil {
+		return "", noop, err
+	}
+	name := f.Name()
+	if _, err := f.WriteString(b.String()); err != nil {
+		f.Close()
+		os.Remove(name)
+		return "", noop, err
+	}
+	f.Close()
+	return name, func() { os.Remove(name) }, nil
+}
+
+// templComponentDirs lists the directories of imported packages that live
+// outside this module and ship .templ files.
+//
+// `go list` answers both questions at once: it resolves an import path to the
+// directory the module cache put it in, which is the path Tailwind needs and
+// the one nobody can write down by hand.
+func templComponentDirs() ([]string, error) {
+	// Output is used even when the command fails. `go list` reports what it
+	// resolved and exits non-zero for anything it could not — a project mid-
+	// edit, or one package with a missing go.sum entry. Discarding the whole
+	// answer over one bad package silently drops the styles for every good
+	// one, and the page renders unstyled with nothing to explain why.
+	cmd := exec.Command(goBin(), "list", "-deps", "-f",
+		"{{if and .Module (not .Module.Main)}}{{.Dir}}{{end}}", "./...")
+	out, _ := cmd.Output()
+	seen := map[string]bool{}
+	var dirs []string
+	for _, dir := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if dir == "" || seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		if templs, _ := filepath.Glob(filepath.Join(dir, "*.templ")); len(templs) > 0 {
+			dirs = append(dirs, dir)
+		}
+	}
+	sort.Strings(dirs)
+	return dirs, nil
 }
 
 // ensureAssets regenerates everything that is gitignored yet embedded into a
