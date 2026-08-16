@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -591,4 +592,38 @@ func TestMobileCloneUsable(t *testing.T) {
 			t.Fatal("expected unverifiable revision to be unusable")
 		}
 	})
+}
+
+// TestMobileCloneSurvivesTempCleanup — the clone must not live anywhere the
+// operating system sweeps.
+//
+// It used to sit in $TMPDIR. macOS clears that periodically, and once it goes
+// the generated go.work names a directory that is not there. Every `go`
+// command in the project then fails, including `go tool irgo` and
+// `go run ./cmd/irgo` — so irgo cannot regenerate the file it wrote, and the
+// error never suggests the fix, which is deleting go.work by hand.
+func TestMobileCloneSurvivesTempCleanup(t *testing.T) {
+	dir := mobileCloneDir()
+
+	if tmp := os.TempDir(); strings.HasPrefix(dir, filepath.Clean(tmp)) {
+		t.Errorf("the x/mobile clone is in %s, which the OS may delete.\n"+
+			"When it does, go.work references a missing directory and no go "+
+			"command can run — including the one that would repair it.", tmp)
+	}
+	if !strings.Contains(dir, ".irgo") {
+		t.Errorf("clone at %s is outside irgo's own directory, so `tools remove` "+
+			"cannot account for it", dir)
+	}
+}
+
+// TestLegacyCloneIsStillRecognised — a workspace written by an older irgo
+// points at the old temp location. It has to keep being identified as irgo's,
+// or the file it wrote becomes something a user has to diagnose alone.
+func TestLegacyCloneIsStillRecognised(t *testing.T) {
+	if legacyMobileCloneDir() == mobileCloneDir() {
+		t.Fatal("legacy and current clone paths are the same; the legacy check is dead code")
+	}
+	if filepath.Base(legacyMobileCloneDir()) != "golang-mobile" {
+		t.Error("the legacy path no longer matches what older versions wrote")
+	}
 }
